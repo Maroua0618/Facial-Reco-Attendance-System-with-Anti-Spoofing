@@ -10,6 +10,8 @@ import Dashboard from "./pages/Dashboard";
 import ModuleDetail from "./pages/ModuleDetail";
 import GroupDetail from "./pages/GroupDetail";
 import SessionDetail from "./pages/SessionDetail";
+import SpoofLog from "./pages/SpoofLog";
+import ActivityLog from "./pages/ActivityLog";
 import Security from "./pages/Security";
 import NotFound from "./pages/NotFound";
 
@@ -30,6 +32,8 @@ const App = () => (
             <Route path="/groups/:id" element={<GroupDetail />} />
             <Route path="/sessions/:id" element={<SessionDetail />} />
             <Route path="/security" element={<Security />} />
+            <Route path="/security/spoof-log" element={<SpoofLog />} />
+            <Route path="/admin/activity" element={<ActivityLog />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

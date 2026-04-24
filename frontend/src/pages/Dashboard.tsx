@@ -13,6 +13,7 @@ import { StudentRankingPanel } from '@/components/dashboard/StudentRankingPanel'
 import { AttendanceHeatmap } from '@/components/dashboard/AttendanceHeatmap';
 import { TodayScheduleCard } from '@/components/dashboard/TodayScheduleCard';
 import { LiveSessionCard } from '@/components/dashboard/LiveSessionCard';
+import { SystemHealthCard } from '@/components/dashboard/SystemHealthCard';
 import { api, type DashboardFilters as Filters } from '@/lib/mock-data';
 import { downloadCSV, toCSV } from '@/lib/csv';
 
@@ -30,17 +31,14 @@ export default function Dashboard() {
   const { data: heatmap = [] }   = useQuery({ queryKey: ['heatmap', filters],  queryFn: () => api.getHeatmap(filters) });
   const { data: today = [] }     = useQuery({ queryKey: ['today'],             queryFn: () => api.getTodaySessions() });
   const { data: live }           = useQuery({ queryKey: ['live'],              queryFn: () => api.getLiveSession() });
+  const { data: health }         = useQuery({ queryKey: ['health'],            queryFn: () => api.getSystemHealth() });
 
   const exportRecent = () => {
     const rows = recent.map((r) => ({
-      date: r.session.session_date,
-      time: r.session.start_time,
-      module_code: r.module.module_code,
-      module_name: r.module.module_name,
-      group: r.group.group_name,
-      type: r.session.session_type,
-      present: r.present_count,
-      absent: r.absent_count,
+      date: r.session.session_date, time: r.session.start_time,
+      module_code: r.module.module_code, module_name: r.module.module_name,
+      group: r.group.group_name, type: r.session.session_type,
+      present: r.present_count, absent: r.absent_count,
       rate_pct: (r.attendance_rate * 100).toFixed(1),
     }));
     const csv = toCSV(rows, [
@@ -65,10 +63,8 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-2">
             <DashboardFilters
-              modules={modules}
-              groups={groups}
-              moduleId={filters.moduleId}
-              groupId={filters.groupId}
+              modules={modules} groups={groups}
+              moduleId={filters.moduleId} groupId={filters.groupId}
               onModuleChange={(moduleId) => setFilters((f) => ({ ...f, moduleId }))}
               onGroupChange={(groupId) => setFilters((f) => ({ ...f, groupId }))}
             />
@@ -86,7 +82,10 @@ export default function Dashboard() {
           <TrendBadge trend={trend ?? null} />
         </div>
 
-        <WeeklyAttendanceChart data={weekly} />
+        <div className="grid lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2"><WeeklyAttendanceChart data={weekly} /></div>
+          <SystemHealthCard health={health} />
+        </div>
 
         <div className="grid lg:grid-cols-2 gap-4">
           <ModuleRateChart data={byModule} />

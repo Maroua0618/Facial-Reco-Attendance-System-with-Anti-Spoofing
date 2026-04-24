@@ -1,6 +1,6 @@
 // Shape mirrors supabase/migrations/20260424000001_baseline.sql
-// When the migration is applied to live Supabase, replace these with
-// the auto-generated `Database` types from `supabase gen types typescript`.
+// When the migration is applied, replace these with auto-generated
+// `Database` types from `supabase gen types typescript`.
 
 export type TeacherRole = 'admin' | 'lecturer' | 'teacher';
 export type SessionType = 'lecture' | 'td' | 'tp' | 'exam';
@@ -52,8 +52,8 @@ export interface Session {
   id: string;
   module_id: string;
   group_id: string;
-  session_date: string; // ISO date
-  start_time: string;   // HH:mm
+  session_date: string;
+  start_time: string;
   end_time: string;
   session_type: SessionType;
   week: number;
@@ -115,12 +115,12 @@ export interface TrendSnapshot {
   previous_week: number;
   current_rate: number;
   previous_rate: number;
-  delta: number; // current - previous
+  delta: number;
 }
 
 export interface HeatmapCell {
-  day_of_week: number; // 0=Mon .. 5=Sat
-  time_slot: string;   // HH:mm
+  day_of_week: number;
+  time_slot: string;
   attendance_rate: number;
   session_count: number;
 }
@@ -169,4 +169,35 @@ export interface SessionDetail {
   absent_count: number;
   spoof_count: number;
   attendance_rate: number;
+}
+
+// ---- Phase 3 ----
+
+export interface SpoofLogEntry {
+  attendance_id: string;
+  student: Student;
+  session: Session;
+  module: Module;
+  group: Group;
+  marked_at: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  at: string;
+  actor: Teacher;
+  session: Session;
+  module: Module;
+  group: Group;
+  student: Student;
+  prev_status: AttendanceStatus | 'not_marked';
+  new_status: AttendanceStatus;
+}
+
+export interface SystemHealth {
+  avg_confidence: number;       // 0..1, over present rows
+  match_rate: number;           // (present+spoof)/total marked
+  spoof_rate: number;           // spoof/total marked
+  total_marked: number;
+  daily_counts: { date: string; recognized: number; spoof: number }[];
 }

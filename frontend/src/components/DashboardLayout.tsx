@@ -24,18 +24,24 @@ import {
   BookOpen,
   UserPlus,
   History,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
 const navItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Add Module", url: "/modules/add", icon: BookOpen },
-  { title: "Register Student", url: "/students/register", icon: UserPlus },
-  { title: "Attendance", url: "/attendance", icon: Camera },
-  { title: "History", url: "/history", icon: History },
-  { title: "Students", url: "/students", icon: Users },
-  { title: "Security", url: "/security", icon: ShieldAlert },
+  { title: "Dashboard",        url: "/dashboard",          icon: LayoutDashboard },
+  { title: "Add Module",       url: "/modules/add",        icon: BookOpen },
+  { title: "Register Student", url: "/students/register",  icon: UserPlus },
+  { title: "Attendance",       url: "/attendance",         icon: Camera },
+  { title: "History",          url: "/history",            icon: History },
+  { title: "Students",         url: "/students",           icon: Users },
+];
+
+const securityItems = [
+  { title: "Security",      url: "/security",            icon: ShieldAlert },
+  { title: "Spoof log",     url: "/security/spoof-log",  icon: ShieldAlert },
+  { title: "Activity log",  url: "/admin/activity",      icon: Activity },
 ];
 
 function AppSidebarContent() {
@@ -60,10 +66,25 @@ function AppSidebarContent() {
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink
-                      to={item.url}
-                      activeClassName="bg-primary/10 text-primary"
-                    >
+                    <NavLink to={item.url} activeClassName="bg-primary/10 text-primary">
+                      <item.icon className="w-4 h-4" />
+                      {!collapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Security & Admin</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {securityItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                    <NavLink to={item.url} activeClassName="bg-primary/10 text-primary">
                       <item.icon className="w-4 h-4" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
@@ -75,12 +96,7 @@ function AppSidebarContent() {
         </SidebarGroup>
       </SidebarContent>
       <div className="mt-auto p-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2 text-muted-foreground"
-          asChild
-        >
+        <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground" asChild>
           <Link to="/">
             <LogOut className="w-4 h-4" />
             {!collapsed && <span>Logout</span>}

@@ -20,6 +20,9 @@ import type {
   GroupWithRate,
   StudentWithRate,
   RosterEntry,
+  SpoofLogEntry,
+  AuditLogEntry,
+  SystemHealth,
 } from '@/types/db';
 
 const uid = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
@@ -30,6 +33,9 @@ export const teachers: Teacher[] = [
   { id: uid(3), full_name: 'Ms. Sara Bensaid',   email: 's.bensaid@univ.dz',  role: 'teacher',  created_at: '' },
   { id: uid(4), full_name: 'Admin',              email: 'admin@univ.dz',      role: 'admin',    created_at: '' },
 ];
+
+// Pretend the current user is Admin for the demo. Wire to Supabase Auth later.
+const CURRENT_USER_ID = uid(4);
 
 export const groups: Group[] = [
   { id: uid(11), group_name: 'G1', year: 2, created_at: '' },
@@ -87,10 +93,8 @@ function makeSessions(): Session[] {
     for (let week = 1; week <= 14; week++) {
       const weekStart = new Date(startMonday);
       weekStart.setDate(weekStart.getDate() + (week - 1) * 7);
-      const lectureDate = new Date(weekStart);
-      lectureDate.setDate(lectureDate.getDate() + lectureDay);
-      const tdDate = new Date(weekStart);
-      tdDate.setDate(tdDate.getDate() + tdDay);
+      const lectureDate = new Date(weekStart); lectureDate.setDate(lectureDate.getDate() + lectureDay);
+      const tdDate      = new Date(weekStart); tdDate.setDate(tdDate.getDate() + tdDay);
 
       out.push({
         id: uid(2000 + counter++),
@@ -142,6 +146,7 @@ function makeAttendance(): Attendance[] {
   return out;
 }
 export const attendance: Attendance[] = makeAttendance();
+export const auditLog: AuditLogEntry[] = [];
 
 // --- API ---
 
@@ -162,9 +167,22 @@ function sessionsById(ids: Set<string>): Attendance[] {
   return attendance.filter((a) => ids.has(a.session_id));
 }
 
-// Pick the latest session date in mock data as the demo "today".
 function getDemoToday(): string {
   return sessions.reduce((acc, s) => (s.session_date > acc ? s.session_date : acc), '');
+}
+
+function buildSessionRow(sess: Session): SessionRow {
+  const mod = modules.find((m) => m.id === sess.module_id)!;
+  const grp = groups.find((g) => g.id === sess.group_id)!;
+  const att = attendance.filter((a) => a.session_id === sess.id);
+  const present = att.filter((a) => a.status === 'present').length;
+  const absent  = att.filter((a) => a.status === 'absent').length;
+  return {
+    session: sess, module: mod, group: grp,
+    total_students: att.length,
+    present_count: present, absent_count: absent,
+    attendance_rate: att.length ? present / att.length : 0,
+  };
 }
 
 export const api = {
@@ -219,8 +237,7 @@ export const api = {
   async getRecentSessions(f: DashboardFilters = {}, limit = 10): Promise<SessionRow[]> {
     return filterSessions(f).slice()
       .sort((a, b) => (b.session_date + b.start_time).localeCompare(a.session_date + a.start_time))
-      .slice(0, limit)
-      .map((sess) => buildSessionRow(sess));
+      .slice(0, limit).map(buildSessionRow);
   },
 
   async getStudentRanking(f: DashboardFilters = {}, limit = 5): Promise<{ worst: RankedStudent[]; best: RankedStudent[] }> {
@@ -363,21 +380,14 @@ export const api = {
 
   async getTodaySessions(): Promise<SessionRow[]> {
     const today = getDemoToday();
-    return sessions
-      .filter((s) => s.session_date === today)
+    return sessions.filter((s) => s.session_date === today)
       .sort((a, b) => a.start_time.localeCompare(b.start_time))
       .map(buildSessionRow);
   },
 
-  async getLiveSession(): Promise<{
-    row: SessionRow;
-    recognized: number;
-    total: number;
-    last_recognized: { student: Student; confidence: number; at: string }[];
-  } | null> {
+  async getLiveSession() {
     const today = await api.getTodaySessions();
     if (today.length === 0) return null;
-    // pick the middle one as "in progress" for demo
     const liveRow = today[Math.floor(today.length / 2)] ?? today[0];
     const sessAtt = attendance.filter((a) => a.session_id === liveRow.session.id);
     const recognizedAtt = sessAtt.filter((a) => a.status === 'present' || a.status === 'spoof');
@@ -394,31 +404,92 @@ export const api = {
     };
   },
 
-  async updateAttendanceStatus(sessionId: string, studentId: string, status: AttendanceStatus): Promise<void> {
+  async updateAttendanceStatus(sessionId: string, studentId: string, newStatus: AttendanceStatus): Promise<void> {
     const idx = attendance.findIndex((a) => a.session_id === sessionId && a.student_id === studentId);
     const now = new Date().toISOString();
+    const prev: AttendanceStatus | 'not_marked' = idx >= 0 ? attendance[idx].status : 'not_marked';
+
     if (idx >= 0) {
-      attendance[idx] = { ...attendance[idx], status, updated_at: now };
+      attendance[idx] = { ...attendance[idx], status: newStatus, updated_at: now };
     } else {
       attendance.push({
         id: uid(99000 + attendance.length + 1),
         session_id: sessionId, student_id: studentId,
-        status, confidence: null, marked_at: now, updated_at: now,
+        status: newStatus, confidence: null,
+        marked_at: now, updated_at: now,
+      });
+    }
+
+    const sess = sessions.find((s) => s.id === sessionId);
+    const stu  = students.find((s) => s.id === studentId);
+    const actor = teachers.find((t) => t.id === CURRENT_USER_ID);
+    if (sess && stu && actor) {
+      auditLog.unshift({
+        id: uid(80000 + auditLog.length + 1),
+        at: now,
+        actor,
+        session: sess,
+        module: modules.find((m) => m.id === sess.module_id)!,
+        group:  groups.find((g)  => g.id === sess.group_id)!,
+        student: stu,
+        prev_status: prev,
+        new_status: newStatus,
       });
     }
   },
-};
 
-function buildSessionRow(sess: Session): SessionRow {
-  const mod = modules.find((m) => m.id === sess.module_id)!;
-  const grp = groups.find((g) => g.id === sess.group_id)!;
-  const att = attendance.filter((a) => a.session_id === sess.id);
-  const present = att.filter((a) => a.status === 'present').length;
-  const absent  = att.filter((a) => a.status === 'absent').length;
-  return {
-    session: sess, module: mod, group: grp,
-    total_students: att.length,
-    present_count: present, absent_count: absent,
-    attendance_rate: att.length ? present / att.length : 0,
-  };
-}
+  async getSpoofLog(f: DashboardFilters = {}): Promise<SpoofLogEntry[]> {
+    const fs = filterSessions(f);
+    const sessionIds = new Set(fs.map((s) => s.id));
+    return attendance
+      .filter((a) => a.status === 'spoof' && sessionIds.has(a.session_id))
+      .sort((a, b) => b.marked_at.localeCompare(a.marked_at))
+      .map((a) => {
+        const sess = sessions.find((s) => s.id === a.session_id)!;
+        return {
+          attendance_id: a.id,
+          student: students.find((s) => s.id === a.student_id)!,
+          session: sess,
+          module: modules.find((m) => m.id === sess.module_id)!,
+          group:  groups.find((g)  => g.id === sess.group_id)!,
+          marked_at: a.marked_at,
+        };
+      });
+  },
+
+  async getAuditLog(limit = 100): Promise<AuditLogEntry[]> {
+    return auditLog.slice(0, limit);
+  },
+
+  async getSystemHealth(): Promise<SystemHealth> {
+    const total = attendance.length;
+    const present = attendance.filter((a) => a.status === 'present');
+    const spoof   = attendance.filter((a) => a.status === 'spoof');
+    const recognized = present.length + spoof.length;
+    const avgConf = present.length
+      ? present.reduce((acc, a) => acc + (a.confidence ?? 0), 0) / present.length
+      : 0;
+
+    // Daily counts for the last 7 distinct dates we have data on
+    const byDate = new Map<string, { recognized: number; spoof: number }>();
+    for (const a of attendance) {
+      const date = a.marked_at.slice(0, 10);
+      const slot = byDate.get(date) ?? { recognized: 0, spoof: 0 };
+      if (a.status === 'present' || a.status === 'spoof') slot.recognized += 1;
+      if (a.status === 'spoof') slot.spoof += 1;
+      byDate.set(date, slot);
+    }
+    const daily_counts = [...byDate.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-7)
+      .map(([date, v]) => ({ date, recognized: v.recognized, spoof: v.spoof }));
+
+    return {
+      avg_confidence: avgConf,
+      match_rate: total ? recognized / total : 0,
+      spoof_rate: total ? spoof.length / total : 0,
+      total_marked: total,
+      daily_counts,
+    };
+  },
+};
