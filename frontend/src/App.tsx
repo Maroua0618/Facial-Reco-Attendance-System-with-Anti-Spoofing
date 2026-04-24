@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
 import Security from "./pages/Security";
 import NotFound from "./pages/NotFound";
 
@@ -21,7 +22,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
-
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/security" element={<Security />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
