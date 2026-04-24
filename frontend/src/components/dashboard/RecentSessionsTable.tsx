@@ -1,5 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -33,19 +35,26 @@ export function RecentSessionsTable({ rows }: { rows: SessionRow[] }) {
               <TableHead className="text-right">Present</TableHead>
               <TableHead className="text-right">Absent</TableHead>
               <TableHead className="text-right">Rate</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map(({ session, module, group, present_count, absent_count, attendance_rate }) => (
-              <TableRow key={session.id}>
+              <TableRow key={session.id} className="hover:bg-muted/40">
                 <TableCell className="font-mono text-xs">
                   {session.session_date} · {session.start_time}
                 </TableCell>
                 <TableCell>
-                  <div className="font-medium">{module.module_code}</div>
-                  <div className="text-xs text-muted-foreground">{module.module_name}</div>
+                  <Link to={`/modules/${module.id}`} className="hover:underline">
+                    <div className="font-medium">{module.module_code}</div>
+                    <div className="text-xs text-muted-foreground">{module.module_name}</div>
+                  </Link>
                 </TableCell>
-                <TableCell>{group.group_name} (Y{group.year})</TableCell>
+                <TableCell>
+                  <Link to={`/groups/${group.id}`} className="hover:underline">
+                    {group.group_name} (Y{group.year})
+                  </Link>
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline" className="uppercase">{session.session_type}</Badge>
                 </TableCell>
@@ -55,6 +64,11 @@ export function RecentSessionsTable({ rows }: { rows: SessionRow[] }) {
                   <Badge variant={rateColor(attendance_rate)}>
                     {(attendance_rate * 100).toFixed(0)}%
                   </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Link to={`/sessions/${session.id}`} className="inline-flex items-center text-muted-foreground hover:text-foreground">
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
                 </TableCell>
               </TableRow>
             ))}

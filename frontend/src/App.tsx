@@ -7,6 +7,9 @@ import { ThemeProvider } from "next-themes";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import ModuleDetail from "./pages/ModuleDetail";
+import GroupDetail from "./pages/GroupDetail";
+import SessionDetail from "./pages/SessionDetail";
 import Security from "./pages/Security";
 import NotFound from "./pages/NotFound";
 
@@ -23,6 +26,9 @@ const App = () => (
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/modules/:id" element={<ModuleDetail />} />
+            <Route path="/groups/:id" element={<GroupDetail />} />
+            <Route path="/sessions/:id" element={<SessionDetail />} />
             <Route path="/security" element={<Security />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

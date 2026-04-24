@@ -10,9 +10,16 @@ import type {
   DashboardStats,
   WeeklyPoint,
   ModuleRatePoint,
+  RankedStudent,
+  TrendSnapshot,
+  HeatmapCell,
+  ModuleDetail,
+  GroupDetail,
+  SessionDetail,
+  GroupWithRate,
+  StudentWithRate,
+  RosterEntry,
 } from '@/types/db';
-
-// ---------- Seed data (small, readable) ----------
 
 const uid = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 
@@ -30,9 +37,9 @@ export const groups: Group[] = [
 ];
 
 export const modules: Module[] = [
-  { id: uid(21), module_name: 'Algorithmique',     module_code: 'ALGO201', lecturer_id: uid(1), created_at: '' },
-  { id: uid(22), module_name: 'Bases de Données',  module_code: 'BDD202',  lecturer_id: uid(1), created_at: '' },
-  { id: uid(23), module_name: 'Réseaux',           module_code: 'NET203',  lecturer_id: uid(1), created_at: '' },
+  { id: uid(21), module_name: 'Algorithmique',    module_code: 'ALGO201', lecturer_id: uid(1), created_at: '' },
+  { id: uid(22), module_name: 'Bases de Donnees', module_code: 'BDD202',  lecturer_id: uid(1), created_at: '' },
+  { id: uid(23), module_name: 'Reseaux',          module_code: 'NET203',  lecturer_id: uid(1), created_at: '' },
 ];
 
 export const moduleGroups: ModuleGroup[] = [
@@ -45,7 +52,6 @@ export const moduleGroups: ModuleGroup[] = [
   { module_id: uid(23), group_id: uid(13), assigned_teacher_id: uid(3) },
 ];
 
-// 30 students per group → 90 total
 export const students: Student[] = Array.from({ length: 90 }, (_, i) => {
   const idx = i + 1;
   return {
@@ -57,23 +63,44 @@ export const students: Student[] = Array.from({ length: 90 }, (_, i) => {
   };
 });
 
-// Generate 14 weeks of sessions for each (module, group) pair
+// Split 90 students into 3 groups of 30
+function studentsInGroup(groupId: string): string[] {
+  if (groupId === uid(11)) return students.slice(0, 30).map((s) => s.id);
+  if (groupId === uid(12)) return students.slice(30, 60).map((s) => s.id);
+  if (groupId === uid(13)) return students.slice(60, 90).map((s) => s.id);
+  return [];
+}
+
+// Distribute sessions across Mon-Fri and multiple time slots so heatmap is meaningful
+const LECTURE_SLOTS = ['08:30', '10:15', '13:30'];
+const TD_SLOTS      = ['10:15', '13:30', '15:00'];
+
 function makeSessions(): Session[] {
   const out: Session[] = [];
-  const startMonday = new Date('2026-01-05'); // week 1 Monday
+  const startMonday = new Date('2026-01-05');
   let counter = 1;
-  for (const mg of moduleGroups) {
+  moduleGroups.forEach((mg, mgIdx) => {
+    const lectureDay = mgIdx % 5;          // 0..4 = Mon..Fri
+    const tdDay      = (mgIdx + 2) % 5;
+    const lectureSlot = LECTURE_SLOTS[mgIdx % LECTURE_SLOTS.length];
+    const tdSlot      = TD_SLOTS[mgIdx % TD_SLOTS.length];
+
     for (let week = 1; week <= 14; week++) {
-      const date = new Date(startMonday);
-      date.setDate(date.getDate() + (week - 1) * 7);
-      // 1 lecture + 1 TD per (module,group) per week
+      const weekStart = new Date(startMonday);
+      weekStart.setDate(weekStart.getDate() + (week - 1) * 7);
+
+      const lectureDate = new Date(weekStart);
+      lectureDate.setDate(lectureDate.getDate() + lectureDay);
+      const tdDate = new Date(weekStart);
+      tdDate.setDate(tdDate.getDate() + tdDay);
+
       out.push({
         id: uid(2000 + counter++),
         module_id: mg.module_id,
         group_id: mg.group_id,
-        session_date: date.toISOString().slice(0, 10),
-        start_time: '08:30',
-        end_time: '10:00',
+        session_date: lectureDate.toISOString().slice(0, 10),
+        start_time: lectureSlot,
+        end_time: addMinutes(lectureSlot, 90),
         session_type: 'lecture',
         week,
         created_at: '',
@@ -82,41 +109,43 @@ function makeSessions(): Session[] {
         id: uid(2000 + counter++),
         module_id: mg.module_id,
         group_id: mg.group_id,
-        session_date: date.toISOString().slice(0, 10),
-        start_time: '10:15',
-        end_time: '11:45',
+        session_date: tdDate.toISOString().slice(0, 10),
+        start_time: tdSlot,
+        end_time: addMinutes(tdSlot, 90),
         session_type: 'td',
         week,
         created_at: '',
       });
     }
-  }
+  });
   return out;
 }
+
+function addMinutes(hhmm: string, mins: number): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const total = h * 60 + m + mins;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
 export const sessions: Session[] = makeSessions();
 
-// For each session, mark each student in that group present/absent (~85% present)
 function makeAttendance(): Attendance[] {
   const out: Attendance[] = [];
   let counter = 1;
-  // group_id -> student_ids (split 90 students into 3 groups of 30)
-  const groupStudents: Record<string, string[]> = {
-    [uid(11)]: students.slice(0, 30).map((s) => s.id),
-    [uid(12)]: students.slice(30, 60).map((s) => s.id),
-    [uid(13)]: students.slice(60, 90).map((s) => s.id),
-  };
   for (const sess of sessions) {
-    const studentIds = groupStudents[sess.group_id] ?? [];
+    const studentIds = studentsInGroup(sess.group_id);
     for (const sid of studentIds) {
-      // deterministic pseudo-random based on counter
+      // Per-student deterministic baseline rate so ranking is stable
+      const studentHash = parseInt(sid.slice(-6), 10);
+      const baseline = 0.6 + ((studentHash * 53) % 40) / 100; // 0.60..0.99
       const r = (counter * 9301 + 49297) % 233280 / 233280;
-      const status = r < 0.85 ? 'present' : r < 0.97 ? 'absent' : 'spoof';
+      const status = r < baseline ? 'present' : r < baseline + 0.03 ? 'spoof' : 'absent';
       out.push({
         id: uid(50000 + counter++),
         session_id: sess.id,
         student_id: sid,
         status,
-        confidence: status === 'present' ? 0.92 + (r * 0.07) : null,
+        confidence: status === 'present' ? 0.92 + r * 0.07 : null,
         marked_at: sess.session_date + 'T' + sess.start_time + ':00Z',
         updated_at: sess.session_date + 'T' + sess.start_time + ':00Z',
       });
@@ -126,15 +155,7 @@ function makeAttendance(): Attendance[] {
 }
 export const attendance: Attendance[] = makeAttendance();
 
-// ---------- Data-access API (swap this file for real Supabase later) ----------
-
-function studentsInGroup(groupId: string): string[] {
-  // Same split logic as makeAttendance
-  if (groupId === uid(11)) return students.slice(0, 30).map((s) => s.id);
-  if (groupId === uid(12)) return students.slice(30, 60).map((s) => s.id);
-  if (groupId === uid(13)) return students.slice(60, 90).map((s) => s.id);
-  return [];
-}
+// --- API ---
 
 export interface DashboardFilters {
   moduleId?: string;
@@ -149,33 +170,31 @@ function filterSessions(f: DashboardFilters): Session[] {
   });
 }
 
+function sessionsById(ids: Set<string>): Attendance[] {
+  return attendance.filter((a) => ids.has(a.session_id));
+}
+
 export const api = {
-  async getModules(): Promise<Module[]> {
-    return modules;
-  },
-  async getGroups(): Promise<Group[]> {
-    return groups;
-  },
+  async getModules(): Promise<Module[]> { return modules; },
+  async getGroups(): Promise<Group[]>   { return groups;  },
 
   async getStats(f: DashboardFilters = {}): Promise<DashboardStats> {
-    const filteredSessions = filterSessions(f);
-    const sessionIds = new Set(filteredSessions.map((s) => s.id));
-    const att = attendance.filter((a) => sessionIds.has(a.session_id));
+    const fs = filterSessions(f);
+    const att = sessionsById(new Set(fs.map((s) => s.id)));
     const present = att.filter((a) => a.status === 'present').length;
-    const total = att.length;
     return {
       total_students: f.groupId ? studentsInGroup(f.groupId).length : students.length,
       total_modules: f.moduleId ? 1 : modules.length,
-      total_groups: f.groupId ? 1 : groups.length,
-      sessions_this_week: filteredSessions.filter((s) => s.week === 7).length,
-      overall_attendance_rate: total === 0 ? 0 : present / total,
+      total_groups:  f.groupId  ? 1 : groups.length,
+      sessions_this_week: fs.filter((s) => s.week === 7).length,
+      overall_attendance_rate: att.length ? present / att.length : 0,
     };
   },
 
   async getWeeklyAttendance(f: DashboardFilters = {}): Promise<WeeklyPoint[]> {
-    const filteredSessions = filterSessions(f);
+    const fs = filterSessions(f);
     const byWeek = new Map<number, { present: number; total: number; sessions: number }>();
-    for (const sess of filteredSessions) {
+    for (const sess of fs) {
       const slot = byWeek.get(sess.week) ?? { present: 0, total: 0, sessions: 0 };
       slot.sessions += 1;
       const att = attendance.filter((a) => a.session_id === sess.id);
@@ -183,57 +202,219 @@ export const api = {
       slot.present += att.filter((a) => a.status === 'present').length;
       byWeek.set(sess.week, slot);
     }
-    return Array.from(byWeek.entries())
+    return [...byWeek.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([week, v]) => ({
-        week,
-        sessions: v.sessions,
-        attendance_rate: v.total === 0 ? 0 : v.present / v.total,
+        week, sessions: v.sessions,
+        attendance_rate: v.total ? v.present / v.total : 0,
       }));
   },
 
   async getAttendanceRateByModule(f: DashboardFilters = {}): Promise<ModuleRatePoint[]> {
-    const filteredSessions = filterSessions(f);
+    const fs = filterSessions(f);
     const byModule = new Map<string, { present: number; total: number }>();
-    for (const sess of filteredSessions) {
+    for (const sess of fs) {
       const slot = byModule.get(sess.module_id) ?? { present: 0, total: 0 };
       const att = attendance.filter((a) => a.session_id === sess.id);
       slot.total += att.length;
       slot.present += att.filter((a) => a.status === 'present').length;
       byModule.set(sess.module_id, slot);
     }
-    return modules
-      .filter((m) => byModule.has(m.id))
-      .map((m) => {
-        const v = byModule.get(m.id)!;
+    return modules.filter((m) => byModule.has(m.id)).map((m) => {
+      const v = byModule.get(m.id)!;
+      return {
+        module_code: m.module_code,
+        module_name: m.module_name,
+        attendance_rate: v.total ? v.present / v.total : 0,
+      };
+    });
+  },
+
+  async getRecentSessions(f: DashboardFilters = {}, limit = 10): Promise<SessionRow[]> {
+    return filterSessions(f)
+      .slice()
+      .sort((a, b) => (b.session_date + b.start_time).localeCompare(a.session_date + a.start_time))
+      .slice(0, limit)
+      .map((sess) => {
+        const mod = modules.find((m) => m.id === sess.module_id)!;
+        const grp = groups.find((g) => g.id === sess.group_id)!;
+        const att = attendance.filter((a) => a.session_id === sess.id);
+        const present = att.filter((a) => a.status === 'present').length;
+        const absent  = att.filter((a) => a.status === 'absent').length;
         return {
-          module_code: m.module_code,
-          module_name: m.module_name,
-          attendance_rate: v.total === 0 ? 0 : v.present / v.total,
+          session: sess, module: mod, group: grp,
+          total_students: att.length,
+          present_count: present,
+          absent_count: absent,
+          attendance_rate: att.length ? present / att.length : 0,
         };
       });
   },
 
-  async getRecentSessions(f: DashboardFilters = {}, limit = 10): Promise<SessionRow[]> {
-    const filtered = filterSessions(f)
-      .slice()
-      .sort((a, b) => (b.session_date + b.start_time).localeCompare(a.session_date + a.start_time))
-      .slice(0, limit);
-    return filtered.map((sess) => {
-      const mod = modules.find((m) => m.id === sess.module_id)!;
-      const grp = groups.find((g) => g.id === sess.group_id)!;
+  async getStudentRanking(f: DashboardFilters = {}, limit = 5): Promise<{ worst: RankedStudent[]; best: RankedStudent[] }> {
+    const fs = filterSessions(f);
+    const sessionIds = new Set(fs.map((s) => s.id));
+    const scope = attendance.filter((a) => sessionIds.has(a.session_id));
+
+    const perStudent = new Map<string, { attended: number; absent: number; total: number }>();
+    for (const a of scope) {
+      const s = perStudent.get(a.student_id) ?? { attended: 0, absent: 0, total: 0 };
+      s.total += 1;
+      if (a.status === 'present') s.attended += 1;
+      else s.absent += 1;
+      perStudent.set(a.student_id, s);
+    }
+
+    const ranked: RankedStudent[] = [...perStudent.entries()]
+      .map(([studentId, v]) => {
+        const student = students.find((st) => st.id === studentId)!;
+        return {
+          student, attended: v.attended, absent: v.absent, total: v.total,
+          attendance_rate: v.total ? v.attended / v.total : 0,
+        };
+      })
+      .filter((r) => r.total > 0);
+
+    const worst = [...ranked].sort((a, b) => a.attendance_rate - b.attendance_rate).slice(0, limit);
+    const best  = [...ranked].sort((a, b) => b.attendance_rate - a.attendance_rate).slice(0, limit);
+    return { worst, best };
+  },
+
+  async getTrend(f: DashboardFilters = {}): Promise<TrendSnapshot | null> {
+    const weekly = await api.getWeeklyAttendance(f);
+    if (weekly.length < 2) return null;
+    const cur = weekly[weekly.length - 1];
+    const prev = weekly[weekly.length - 2];
+    return {
+      current_week: cur.week,
+      previous_week: prev.week,
+      current_rate: cur.attendance_rate,
+      previous_rate: prev.attendance_rate,
+      delta: cur.attendance_rate - prev.attendance_rate,
+    };
+  },
+
+  async getHeatmap(f: DashboardFilters = {}): Promise<HeatmapCell[]> {
+    const fs = filterSessions(f);
+    type Key = string; // `${dow}|${slot}`
+    const buckets = new Map<Key, { present: number; total: number; sessions: number }>();
+    for (const sess of fs) {
+      const d = new Date(sess.session_date);
+      const jsDow = d.getUTCDay();              // 0=Sun..6=Sat
+      const dow = (jsDow + 6) % 7;              // 0=Mon..6=Sun
+      if (dow > 5) continue;                    // skip Sunday
+      const key = `${dow}|${sess.start_time}`;
       const att = attendance.filter((a) => a.session_id === sess.id);
-      const present = att.filter((a) => a.status === 'present').length;
-      const absent = att.filter((a) => a.status === 'absent').length;
+      const b = buckets.get(key) ?? { present: 0, total: 0, sessions: 0 };
+      b.sessions += 1;
+      b.total   += att.length;
+      b.present += att.filter((a) => a.status === 'present').length;
+      buckets.set(key, b);
+    }
+    return [...buckets.entries()].map(([key, v]) => {
+      const [dow, slot] = key.split('|');
       return {
-        session: sess,
-        module: mod,
-        group: grp,
-        total_students: att.length,
-        present_count: present,
-        absent_count: absent,
-        attendance_rate: att.length === 0 ? 0 : present / att.length,
+        day_of_week: Number(dow),
+        time_slot: slot,
+        attendance_rate: v.total ? v.present / v.total : 0,
+        session_count: v.sessions,
       };
     });
+  },
+
+  async getModuleDetail(moduleId: string): Promise<ModuleDetail | null> {
+    const mod = modules.find((m) => m.id === moduleId);
+    if (!mod) return null;
+    const lecturer = teachers.find((t) => t.id === mod.lecturer_id) ?? null;
+    const mgs = moduleGroups.filter((mg) => mg.module_id === moduleId);
+
+    const groupsOut: GroupWithRate[] = mgs.map((mg) => {
+      const grp = groups.find((g) => g.id === mg.group_id)!;
+      const fs = sessions.filter((s) => s.module_id === moduleId && s.group_id === mg.group_id);
+      const att = attendance.filter((a) => fs.some((s) => s.id === a.session_id));
+      const present = att.filter((a) => a.status === 'present').length;
+      const teacher = teachers.find((t) => t.id === mg.assigned_teacher_id);
+      return {
+        ...grp,
+        attendance_rate: att.length ? present / att.length : 0,
+        session_count: fs.length,
+        assigned_teacher_name: teacher?.full_name ?? null,
+      };
+    });
+
+    const allFs = sessions.filter((s) => s.module_id === moduleId);
+    const allAtt = attendance.filter((a) => allFs.some((s) => s.id === a.session_id));
+    const overallPresent = allAtt.filter((a) => a.status === 'present').length;
+
+    return {
+      module: mod,
+      lecturer,
+      groups: groupsOut,
+      overall_rate: allAtt.length ? overallPresent / allAtt.length : 0,
+      total_sessions: allFs.length,
+    };
+  },
+
+  async getGroupDetail(groupId: string): Promise<GroupDetail | null> {
+    const grp = groups.find((g) => g.id === groupId);
+    if (!grp) return null;
+    const studentIds = studentsInGroup(groupId);
+    const groupSessions = sessions.filter((s) => s.group_id === groupId);
+    const groupSessionIds = new Set(groupSessions.map((s) => s.id));
+
+    const studentsOut: StudentWithRate[] = studentIds.map((sid) => {
+      const att = attendance.filter((a) => a.student_id === sid && groupSessionIds.has(a.session_id));
+      const attended = att.filter((a) => a.status === 'present').length;
+      const absent = att.filter((a) => a.status === 'absent').length;
+      return {
+        student: students.find((s) => s.id === sid)!,
+        attendance_rate: att.length ? attended / att.length : 0,
+        absent,
+        total: att.length,
+      };
+    }).sort((a, b) => a.attendance_rate - b.attendance_rate);
+
+    const moduleIds = new Set(moduleGroups.filter((mg) => mg.group_id === groupId).map((mg) => mg.module_id));
+    const grpModules = modules.filter((m) => moduleIds.has(m.id));
+
+    const att = attendance.filter((a) => groupSessionIds.has(a.session_id));
+    const present = att.filter((a) => a.status === 'present').length;
+
+    return {
+      group: grp,
+      students: studentsOut,
+      modules: grpModules,
+      overall_rate: att.length ? present / att.length : 0,
+    };
+  },
+
+  async getSessionDetail(sessionId: string): Promise<SessionDetail | null> {
+    const sess = sessions.find((s) => s.id === sessionId);
+    if (!sess) return null;
+    const mod = modules.find((m) => m.id === sess.module_id)!;
+    const grp = groups.find((g) => g.id === sess.group_id)!;
+    const sessAtt = attendance.filter((a) => a.session_id === sessionId);
+    const byStudent = new Map(sessAtt.map((a) => [a.student_id, a]));
+
+    const roster: RosterEntry[] = studentsInGroup(sess.group_id).map((sid) => {
+      const a = byStudent.get(sid);
+      const student = students.find((s) => s.id === sid)!;
+      return {
+        student,
+        status: a?.status ?? 'not_marked',
+        confidence: a?.confidence ?? null,
+        marked_at: a?.marked_at ?? null,
+      };
+    });
+
+    const present = roster.filter((r) => r.status === 'present').length;
+    const absent  = roster.filter((r) => r.status === 'absent').length;
+    const spoof   = roster.filter((r) => r.status === 'spoof').length;
+
+    return {
+      session: sess, module: mod, group: grp, roster,
+      present_count: present, absent_count: absent, spoof_count: spoof,
+      attendance_rate: roster.length ? present / roster.length : 0,
+    };
   },
 };

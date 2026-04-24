@@ -6,17 +6,23 @@ import { WeeklyAttendanceChart } from '@/components/dashboard/WeeklyAttendanceCh
 import { ModuleRateChart } from '@/components/dashboard/ModuleRateChart';
 import { RecentSessionsTable } from '@/components/dashboard/RecentSessionsTable';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
+import { TrendBadge } from '@/components/dashboard/TrendBadge';
+import { StudentRankingPanel } from '@/components/dashboard/StudentRankingPanel';
+import { AttendanceHeatmap } from '@/components/dashboard/AttendanceHeatmap';
 import { api, type DashboardFilters as Filters } from '@/lib/mock-data';
 
 export default function Dashboard() {
   const [filters, setFilters] = useState<Filters>({});
 
-  const { data: modules = [] }      = useQuery({ queryKey: ['modules'], queryFn: api.getModules });
-  const { data: groups = [] }       = useQuery({ queryKey: ['groups'],  queryFn: api.getGroups });
-  const { data: stats }             = useQuery({ queryKey: ['stats', filters],   queryFn: () => api.getStats(filters) });
-  const { data: weekly = [] }       = useQuery({ queryKey: ['weekly', filters],  queryFn: () => api.getWeeklyAttendance(filters) });
-  const { data: byModule = [] }     = useQuery({ queryKey: ['byModule', filters],queryFn: () => api.getAttendanceRateByModule(filters) });
-  const { data: recent = [] }       = useQuery({ queryKey: ['recent', filters],  queryFn: () => api.getRecentSessions(filters, 10) });
+  const { data: modules = [] }   = useQuery({ queryKey: ['modules'], queryFn: api.getModules });
+  const { data: groups = [] }    = useQuery({ queryKey: ['groups'],  queryFn: api.getGroups });
+  const { data: stats }          = useQuery({ queryKey: ['stats', filters],    queryFn: () => api.getStats(filters) });
+  const { data: weekly = [] }    = useQuery({ queryKey: ['weekly', filters],   queryFn: () => api.getWeeklyAttendance(filters) });
+  const { data: byModule = [] }  = useQuery({ queryKey: ['byModule', filters], queryFn: () => api.getAttendanceRateByModule(filters) });
+  const { data: recent = [] }    = useQuery({ queryKey: ['recent', filters],   queryFn: () => api.getRecentSessions(filters, 10) });
+  const { data: trend }          = useQuery({ queryKey: ['trend', filters],    queryFn: () => api.getTrend(filters) });
+  const { data: ranking }        = useQuery({ queryKey: ['ranking', filters],  queryFn: () => api.getStudentRanking(filters, 5) });
+  const { data: heatmap = [] }   = useQuery({ queryKey: ['heatmap', filters],  queryFn: () => api.getHeatmap(filters) });
 
   return (
     <DashboardLayout>
@@ -40,12 +46,20 @@ export default function Dashboard() {
 
         {stats && <StatsCards stats={stats} />}
 
-        <div className="grid lg:grid-cols-2 gap-4">
-          <WeeklyAttendanceChart data={weekly} />
-          <ModuleRateChart data={byModule} />
+        <div className="grid md:grid-cols-3 gap-4">
+          <TrendBadge trend={trend ?? null} />
+          <div className="md:col-span-2"><WeeklyAttendanceChart data={weekly} /></div>
         </div>
 
-        <RecentSessionsTable rows={recent} />
+        <div className="grid lg:grid-cols-2 gap-4">
+          <ModuleRateChart data={byModule} />
+          <AttendanceHeatmap cells={heatmap} />
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-4">
+          <StudentRankingPanel worst={ranking?.worst ?? []} best={ranking?.best ?? []} />
+          <div className="lg:col-span-2"><RecentSessionsTable rows={recent} /></div>
+        </div>
       </div>
     </DashboardLayout>
   );

@@ -70,7 +70,8 @@ export interface Attendance {
   updated_at: string;
 }
 
-// Convenience derived shape used by the dashboard table
+// ---- Derived / view shapes ----
+
 export interface SessionRow {
   session: Session;
   module: Module;
@@ -78,7 +79,7 @@ export interface SessionRow {
   total_students: number;
   present_count: number;
   absent_count: number;
-  attendance_rate: number; // 0..1
+  attendance_rate: number;
 }
 
 export interface DashboardStats {
@@ -86,17 +87,86 @@ export interface DashboardStats {
   total_modules: number;
   total_groups: number;
   sessions_this_week: number;
-  overall_attendance_rate: number; // 0..1
+  overall_attendance_rate: number;
 }
 
 export interface WeeklyPoint {
   week: number;
-  attendance_rate: number; // 0..1
+  attendance_rate: number;
   sessions: number;
 }
 
 export interface ModuleRatePoint {
   module_code: string;
   module_name: string;
-  attendance_rate: number; // 0..1
+  attendance_rate: number;
+}
+
+export interface RankedStudent {
+  student: Student;
+  attended: number;
+  absent: number;
+  total: number;
+  attendance_rate: number;
+}
+
+export interface TrendSnapshot {
+  current_week: number;
+  previous_week: number;
+  current_rate: number;
+  previous_rate: number;
+  delta: number; // current - previous
+}
+
+export interface HeatmapCell {
+  day_of_week: number; // 0=Mon .. 5=Sat
+  time_slot: string;   // HH:mm
+  attendance_rate: number;
+  session_count: number;
+}
+
+export interface GroupWithRate extends Group {
+  attendance_rate: number;
+  session_count: number;
+  assigned_teacher_name: string | null;
+}
+
+export interface ModuleDetail {
+  module: Module;
+  lecturer: Teacher | null;
+  groups: GroupWithRate[];
+  overall_rate: number;
+  total_sessions: number;
+}
+
+export interface StudentWithRate {
+  student: Student;
+  attendance_rate: number;
+  absent: number;
+  total: number;
+}
+
+export interface GroupDetail {
+  group: Group;
+  students: StudentWithRate[];
+  modules: Module[];
+  overall_rate: number;
+}
+
+export interface RosterEntry {
+  student: Student;
+  status: AttendanceStatus | 'not_marked';
+  confidence: number | null;
+  marked_at: string | null;
+}
+
+export interface SessionDetail {
+  session: Session;
+  module: Module;
+  group: Group;
+  roster: RosterEntry[];
+  present_count: number;
+  absent_count: number;
+  spoof_count: number;
+  attendance_rate: number;
 }
