@@ -30,7 +30,7 @@ export function HeroSection() {
 
           <div className="flex flex-wrap gap-4">
             <Button asChild size="lg" className="glow-sm text-base px-8">
-              <Link to="/login">
+              <Link to="/login?tab=signup">
                 Get Started <ArrowRight className="ml-2 w-4 h-4" />
               </Link>
             </Button>
@@ -40,7 +40,7 @@ export function HeroSection() {
               size="lg"
               className="text-base px-8"
             >
-              <Link to="/login">Login</Link>
+              <Link to="/login?tab=login">Login</Link>
             </Button>
           </div>
 
