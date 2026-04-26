@@ -26,7 +26,8 @@ import {
   History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 
 const navItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -43,15 +44,27 @@ function AppSidebarContent() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const isActive = (path: string) => location.pathname === path;
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    await signOut();
+    navigate("/", { replace: true });
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
-      <div className="p-4 flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-          <Scan className="w-5 h-5 text-primary" />
+      {collapsed ? (
+        <div className="h-6" />
+      ) : (
+        <div className="p-4 flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+            <Scan className="w-5 h-5 text-primary" />
+          </div>
+          <span className="font-bold">FaceGuard</span>
         </div>
-        {!collapsed && <span className="font-bold">FaceGuard</span>}
-      </div>
+      )}
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
@@ -78,13 +91,11 @@ function AppSidebarContent() {
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2 text-muted-foreground"
-          asChild
+          className={`w-full gap-2 text-muted-foreground ${collapsed ? "justify-center px-0" : "justify-start"}`}
+          onClick={handleLogout}
         >
-          <Link to="/">
-            <LogOut className="w-4 h-4" />
-            {!collapsed && <span>Logout</span>}
-          </Link>
+          <LogOut className="w-4 h-4" />
+          {!collapsed && <span>Logout</span>}
         </Button>
       </div>
     </Sidebar>
@@ -99,13 +110,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="flex-1 flex flex-col">
           <header className="h-14 flex items-center border-b border-border px-4 gap-4">
             <SidebarTrigger />
-            <div className="flex-1" />
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                T
-              </div>
-              <span className="text-sm hidden md:block">Teacher</span>
-            </div>
           </header>
           <main className="flex-1 p-6 overflow-auto">{children}</main>
         </div>
