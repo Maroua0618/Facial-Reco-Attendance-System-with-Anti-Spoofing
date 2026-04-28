@@ -16,9 +16,14 @@ import { LiveSessionCard } from '@/components/dashboard/LiveSessionCard';
 import { SystemHealthCard } from '@/components/dashboard/SystemHealthCard';
 import { api, type DashboardFilters as Filters } from '@/lib/mock-data';
 import { downloadCSV, toCSV } from '@/lib/csv';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Dashboard() {
   const [filters, setFilters] = useState<Filters>({});
+  const { user } = useAuth();
+  const rawFullName = user?.user_metadata?.full_name;
+  const fullName =
+    typeof rawFullName === 'string' && rawFullName.trim() !== '' ? rawFullName : 'Teacher';
 
   const { data: modules = [] }   = useQuery({ queryKey: ['modules'], queryFn: api.getModules });
   const { data: groups = [] }    = useQuery({ queryKey: ['groups'],  queryFn: api.getGroups });
@@ -56,7 +61,7 @@ export default function Dashboard() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <h1 className="text-2xl font-bold">{fullName}'s Dashboard</h1>
             <p className="text-sm text-muted-foreground">
               Attendance overview · using mock data until DB migration is applied
             </p>

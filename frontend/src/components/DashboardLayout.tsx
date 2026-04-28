@@ -13,7 +13,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Camera,
@@ -27,7 +27,7 @@ import {
   Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
   { title: "Dashboard",        url: "/dashboard",          icon: LayoutDashboard },
@@ -48,7 +48,14 @@ function AppSidebarContent() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const isActive = (path: string) => location.pathname === path;
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/", { replace: true });
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
@@ -96,11 +103,9 @@ function AppSidebarContent() {
         </SidebarGroup>
       </SidebarContent>
       <div className="mt-auto p-4">
-        <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground" asChild>
-          <Link to="/">
-            <LogOut className="w-4 h-4" />
-            {!collapsed && <span>Logout</span>}
-          </Link>
+        <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground" onClick={handleLogout}>
+          <LogOut className="w-4 h-4" />
+          {!collapsed && <span>Logout</span>}
         </Button>
       </div>
     </Sidebar>
@@ -108,6 +113,12 @@ function AppSidebarContent() {
 }
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const rawFullName = user?.user_metadata?.full_name;
+  const fullName =
+    typeof rawFullName === "string" && rawFullName.trim() !== "" ? rawFullName : "Teacher";
+  const initial = fullName.charAt(0).toUpperCase();
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
@@ -118,9 +129,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             <div className="flex-1" />
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                T
+                {initial}
               </div>
-              <span className="text-sm hidden md:block">Teacher</span>
+              <span className="text-sm hidden md:block">{fullName}</span>
             </div>
           </header>
           <main className="flex-1 p-6 overflow-auto">{children}</main>

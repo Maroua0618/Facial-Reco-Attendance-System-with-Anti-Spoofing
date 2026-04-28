@@ -1,31 +1,95 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Scan, Mail, Lock, Eye, EyeOff, Camera } from "lucide-react";
+import { Scan, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, Navigate, useSearchParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get("tab") === "signup" ? "signup" : "login";
+  const { session } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const [signupName, setSignupName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const [isSigningUp, setIsSigningUp] = useState(false);
+
+  const [showOtpInput, setShowOtpInput] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+
+  if (session) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate("/dashboard");
+    setIsLoggingIn(true);
+    setLoginError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+    if (error) {
+      if (error.message.includes("Email not confirmed")) {
+        setLoginError("Please verify your email address before logging in.");
+      } else {
+        setLoginError(error.message);
+      }
+    } else {
+      navigate("/dashboard", { replace: true });
+    }
+    setIsLoggingIn(false);
+  };
+
+  const handleSignupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSigningUp(true);
+    setSignupError(null);
+    const { data, error } = await supabase.auth.signUp({
+      email: signupEmail,
+      password: signupPassword,
+      options: { data: { full_name: signupName } },
+    });
+    setIsSigningUp(false);
+    if (error) {
+      setSignupError(error.message);
+    } else if (data?.user && data.user.identities && data.user.identities.length === 0) {
+      setSignupError("This email address is already in use.");
+    } else {
+      setShowOtpInput(true);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifyingOtp(true);
+    setOtpError(null);
+    const { error } = await supabase.auth.verifyOtp({ email: signupEmail, token: otp, type: "email" });
+    setIsVerifyingOtp(false);
+    if (error) {
+      setOtpError(error.message);
+    } else {
+      navigate("/dashboard", { replace: true });
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center relative">
       <div className="absolute inset-0 grid-pattern opacity-20" />
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-primary/5 blur-3xl" />
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-full max-w-md mx-4"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 w-full max-w-md mx-4">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 font-bold text-xl mb-2">
             <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -35,81 +99,89 @@ export default function Login() {
           </Link>
           <p className="text-muted-foreground text-sm">Secure AI-powered authentication</p>
         </div>
-
         <div className="glass rounded-2xl p-8">
-          <Tabs defaultValue="login">
+          <Tabs defaultValue={defaultTab}>
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Login</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-
             <TabsContent value="login">
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                {loginError && (<div className="text-sm font-medium text-destructive">{loginError}</div>)}
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input id="email" type="email" placeholder="admin@faceguard.ai" className="pl-10" defaultValue="admin@faceguard.ai" />
+                    <Input id="email" type="email" placeholder="you@university.edu" className="pl-10" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required />
                   </div>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      className="pl-10 pr-10"
-                      defaultValue="password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
+                    <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
-
-                <Button type="submit" className="w-full glow-sm">
-                  Sign In
-                </Button>
-
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-border" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">or</span>
-                  </div>
-                </div>
-
-                <Button type="button" variant="outline" className="w-full gap-2" onClick={() => navigate("/dashboard")}>
-                  <Camera className="w-4 h-4 text-primary" />
-                  Login with Face Recognition
+                <Button type="submit" className="w-full glow-sm" disabled={isLoggingIn}>
+                  {isLoggingIn ? "Signing In..." : "Sign In"}
                 </Button>
               </form>
             </TabsContent>
-
             <TabsContent value="signup">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" placeholder="John Doe" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input id="signup-email" type="email" placeholder="you@university.edu" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input id="signup-password" type="password" placeholder="••••••••" />
-                </div>
-                <Button type="submit" className="w-full glow-sm">Create Account</Button>
-              </form>
+              {!showOtpInput ? (
+                <form onSubmit={handleSignupSubmit} className="space-y-4">
+                  {signupError && (<div className="text-sm font-medium text-destructive">{signupError}</div>)}
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Full Name</Label>
+                    <Input id="name" placeholder="Zoubir Bousnina" value={signupName} onChange={(e) => setSignupName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input id="signup-email" type="email" placeholder="you@university.edu" className="pl-10" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} required />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input id="signup-password" type={showPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} required />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full glow-sm" disabled={isSigningUp}>
+                    {isSigningUp ? "Creating Account..." : "Create Account"}
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="text-center mb-4">
+                    <h3 className="text-lg font-medium text-foreground">Verify your email</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      We've sent a 6-digit verification code to <span className="text-primary">{signupEmail}</span>.
+                    </p>
+                  </div>
+                  {otpError && (<div className="text-sm font-medium text-destructive text-center">{otpError}</div>)}
+                  <div className="space-y-2">
+                    <Label htmlFor="otp" className="text-center block">Verification Code</Label>
+                    <Input id="otp" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6} placeholder="XXXXXX" value={otp} onChange={(e) => setOtp(e.target.value)} className="text-center tracking-[0.5em] text-lg font-mono placeholder:tracking-normal" required />
+                  </div>
+                  <Button type="submit" className="w-full glow-sm bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isVerifyingOtp || otp.length !== 6}>
+                    {isVerifyingOtp ? "Verifying..." : "Verify Code"}
+                  </Button>
+                  <div className="text-center mt-4 text-sm">
+                    <button type="button" onClick={() => setShowOtpInput(false)} className="text-muted-foreground hover:text-primary transition-colors">
+                      Back to sign up
+                    </button>
+                  </div>
+                </form>
+              )}
             </TabsContent>
           </Tabs>
         </div>
