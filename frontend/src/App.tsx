@@ -14,6 +14,12 @@ import SpoofLog from "./pages/SpoofLog";
 import ActivityLog from "./pages/ActivityLog";
 import Security from "./pages/Security";
 import NotFound from "./pages/NotFound";
+import RegisterStudent from "./pages/RegisterStudent";
+import Attendance from "./pages/Attendance";
+import AddModule from "./pages/AddModule";
+import StudentsList from "./pages/StudentsList";
+import StudentProfile from "./pages/StudentProfile";
+import AttendanceHistory from "./pages/AttendanceHistory";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 
 const queryClient = new QueryClient();
@@ -47,9 +53,15 @@ const App = () => (
               {/* Protected */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/modules/add" element={<AddModule />} />
                 <Route path="/modules/:id" element={<ModuleDetail />} />
                 <Route path="/groups/:id" element={<GroupDetail />} />
                 <Route path="/sessions/:id" element={<SessionDetail />} />
+                <Route path="/students" element={<StudentsList />} />
+                <Route path="/students/register" element={<RegisterStudent />} />
+                <Route path="/students/:id" element={<StudentProfile />} />
+                <Route path="/attendance" element={<Attendance />} />
+                <Route path="/history" element={<AttendanceHistory />} />
                 <Route path="/security" element={<Security />} />
                 <Route path="/security/spoof-log" element={<SpoofLog />} />
                 <Route path="/admin/activity" element={<ActivityLog />} />
