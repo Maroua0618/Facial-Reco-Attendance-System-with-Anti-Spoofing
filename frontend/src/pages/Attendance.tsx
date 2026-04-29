@@ -13,6 +13,44 @@ import { toast } from 'sonner';
 
 interface LogEntry { ts: number; res: RecognizeResult }
 
+function LivenessDebug({ res }: { res: RecognizeResult | null }) {
+  if (!res?.liveness_breakdown) {
+    return <div className="text-xs text-muted-foreground">Waiting for first frame...</div>;
+  }
+  const b = res.liveness_breakdown;
+  const named = ['sharpness', 'saturation', 'edge_density', 'reflection', 'motion'];
+  const score = res.live_conf;
+  return (
+    <div className="space-y-2 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="font-medium">Live score</span>
+        <span className={`font-mono ${score >= 0.7 ? 'text-success' : 'text-destructive'}`}>
+          {(score * 100).toFixed(0)}%
+        </span>
+      </div>
+      <div className="space-y-1">
+        {named.filter((k) => b[k] !== undefined).map((k) => (
+          <div key={k} className="flex items-center gap-2">
+            <span className="w-24 text-muted-foreground capitalize">{k.replace('_', ' ')}</span>
+            <div className="flex-1 h-1.5 bg-muted rounded overflow-hidden">
+              <div
+                className={`h-full ${b[k] >= 0.7 ? 'bg-success' : b[k] >= 0.4 ? 'bg-yellow-500' : 'bg-destructive'}`}
+                style={{ width: `${(b[k] * 100).toFixed(0)}%` }}
+              />
+            </div>
+            <span className="font-mono w-10 text-right">{(b[k] * 100).toFixed(0)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="text-[10px] text-muted-foreground pt-1 border-t">
+        Heuristic-only liveness (no ONNX model loaded). High-quality phone
+        replays may still pass. Drop a real model at
+        ai/anti_spoofing/model.onnx to upgrade.
+      </div>
+    </div>
+  );
+}
+
 export default function Attendance() {
   const [sessionId, setSessionId] = useState<string>('');
   const [running, setRunning] = useState(false);
@@ -21,6 +59,7 @@ export default function Attendance() {
 
   const { data: today = [] } = useQuery({ queryKey: ['today'], queryFn: api.getTodaySessions });
   const session = today.find((s) => s.session.id === sessionId);
+  const lastRes = events[0]?.res ?? null;
 
   const handleFrame = async (canvas: HTMLCanvasElement) => {
     if (!running || !session || inflight.current) return;
@@ -29,7 +68,7 @@ export default function Attendance() {
       const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.85));
       const res = await recognizeFace(blob, { session_id: session.session.id, group_id: session.group.id });
       setEvents((arr) => [{ ts: Date.now(), res }, ...arr].slice(0, 25));
-      if (res.reason === 'spoof') toast.error('Spoof attempt blocked');
+      if (res.reason === 'spoof') toast.error(`Spoof blocked (live=${(res.live_conf * 100).toFixed(0)}%)`);
     } catch {
       // network errors stay quiet
     } finally {
@@ -66,42 +105,48 @@ export default function Attendance() {
           <div className="lg:col-span-2">
             <CameraFeed onFrame={handleFrame} intervalMs={1000} />
           </div>
-          <Card>
-            <CardHeader><CardTitle>Recognition log</CardTitle></CardHeader>
-            <CardContent className="space-y-2 max-h-[480px] overflow-auto">
-              {events.length === 0 && <div className="text-sm text-muted-foreground">Waiting for frames...</div>}
-              {events.map((e, i) => {
-                const r = e.res;
-                const time = new Date(e.ts).toLocaleTimeString();
-                if (r.reason === 'spoof') {
+          <div className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Liveness debug</CardTitle></CardHeader>
+              <CardContent><LivenessDebug res={lastRes} /></CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Recognition log</CardTitle></CardHeader>
+              <CardContent className="space-y-2 max-h-[280px] overflow-auto">
+                {events.length === 0 && <div className="text-xs text-muted-foreground">Waiting for frames...</div>}
+                {events.map((e, i) => {
+                  const r = e.res;
+                  const time = new Date(e.ts).toLocaleTimeString();
+                  if (r.reason === 'spoof') {
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <ShieldAlert className="w-3 h-3 text-destructive" />
+                        <span>{time}</span>
+                        <Badge variant="destructive" className="text-[10px]">Spoof</Badge>
+                      </div>
+                    );
+                  }
+                  if (r.ok) {
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <CheckCircle2 className="w-3 h-3 text-success" />
+                        <span>{time}</span>
+                        <span className="font-mono text-[10px]">{r.student_id?.slice(0, 8)}</span>
+                        <Badge variant="outline" className="text-[10px]">{((r.confidence ?? 0) * 100).toFixed(0)}%</Badge>
+                      </div>
+                    );
+                  }
                   return (
-                    <div key={i} className="flex items-center gap-2 text-sm">
-                      <ShieldAlert className="w-4 h-4 text-destructive" />
+                    <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <HelpCircle className="w-3 h-3" />
                       <span>{time}</span>
-                      <Badge variant="destructive">Spoof</Badge>
+                      {r.reason}
                     </div>
                   );
-                }
-                if (r.ok) {
-                  return (
-                    <div key={i} className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="w-4 h-4 text-success" />
-                      <span>{time}</span>
-                      <span className="font-mono text-xs">{r.student_id?.slice(0, 8)}</span>
-                      <Badge variant="outline">{((r.confidence ?? 0) * 100).toFixed(0)}%</Badge>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <HelpCircle className="w-4 h-4" />
-                    <span>{time}</span>
-                    {r.reason}
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
+                })}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </DashboardLayout>

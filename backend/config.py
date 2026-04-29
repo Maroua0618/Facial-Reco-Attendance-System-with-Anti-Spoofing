@@ -7,7 +7,7 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
 MOCK_AI = os.getenv("MOCK_AI", "true").lower() == "true"
 FACE_THRESHOLD = float(os.getenv("FACE_THRESHOLD", "0.5"))
-SPOOF_THRESHOLD = float(os.getenv("SPOOF_THRESHOLD", "0.65"))
+SPOOF_THRESHOLD = float(os.getenv("SPOOF_THRESHOLD", "0.70"))
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",")]
 
 @lru_cache(maxsize=1)

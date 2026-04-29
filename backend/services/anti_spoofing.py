@@ -14,10 +14,8 @@ _session = None
 _load_err: Optional[str] = None
 _tried_load = False
 
-# Per-session previous-frame cache for motion check.
-# key: session_id -> (timestamp, downscaled_gray_frame)
 _prev_frames: Dict[str, Tuple[float, np.ndarray]] = {}
-_PREV_FRAME_TTL = 30.0  # seconds; drop stale entries
+_PREV_FRAME_TTL = 30.0
 
 
 def _ensure_loaded():
@@ -50,61 +48,52 @@ def anti_spoofing_status():
 
 
 def _heuristic_breakdown(img, session_id: Optional[str] = None) -> Dict[str, float]:
-    """Compute individual liveness signals. Returns dict of [0,1] scores."""
     import cv2
     h, w = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 1) Sharpness window: penalize both blurry and too-sharp.
-    # Real face: Laplacian variance ~80-350. Screen: often 400-1200.
+    # 1) Sharpness window: real face ~80-300
     lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-    if lap_var < 60:
-        sharpness = 0.2  # blurry photo
-    elif lap_var > 450:
-        sharpness = 0.3  # too sharp -> LCD grid
+    if lap_var < 80 or lap_var > 300:
+        sharpness = 0.2
     else:
         sharpness = 1.0
 
-    # 2) Saturation: real skin sits in a narrow band
+    # 2) Saturation
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     sat = float(hsv[:, :, 1].mean()) / 255.0
-    if 0.12 <= sat <= 0.55:
-        saturation_score = 1.0
-    else:
-        saturation_score = 0.3
+    saturation_score = 1.0 if 0.12 <= sat <= 0.55 else 0.3
 
-    # 3) Edge density: LCDs emit pixel-grid edges everywhere
+    # 3) Edge density: tightened. Clean below 0.10.
     edges = cv2.Canny(gray, 100, 200)
     edge_ratio = float(edges.mean()) / 255.0
-    if edge_ratio < 0.15:
+    if edge_ratio < 0.10:
         edge_score = 1.0
     else:
-        edge_score = max(0.0, 1.0 - (edge_ratio - 0.15) * 8.0)
+        edge_score = max(0.0, 1.0 - (edge_ratio - 0.10) * 12.0)
 
-    # 4) Reflection / hot-spot peaks: stricter than before
+    # 4) Reflection / hot spots
     bright_ratio = float((gray > 240).mean())
     reflection_score = 1.0 - min(1.0, bright_ratio * 12.0)
 
-    # 5) Inter-frame motion (per session): photos are static
-    motion_score = 1.0  # default if no prior frame
+    # 5) Motion (per session). First-frame default lowered to 0.5 so a
+    # cold start can't trivially pass.
+    motion_score = 0.5
     if session_id:
         small = cv2.resize(gray, (64, 64))
         prev = _prev_frames.get(session_id)
-        # Drop stale
         now = time.time()
         for k in list(_prev_frames.keys()):
             if now - _prev_frames[k][0] > _PREV_FRAME_TTL:
                 del _prev_frames[k]
         if prev is not None:
             diff = float(np.abs(small.astype(np.int16) - prev[1].astype(np.int16)).mean()) / 255.0
-            # Real face: 0.005-0.05 typical between consecutive frames at 1fps.
-            # Static photo on phone: <0.002.
-            if diff > 0.008:
+            if diff > 0.012:
                 motion_score = 1.0
-            elif diff > 0.003:
+            elif diff > 0.005:
                 motion_score = 0.6
             else:
-                motion_score = 0.1  # static -> very suspect
+                motion_score = 0.05
         _prev_frames[session_id] = (now, small)
 
     return {
@@ -120,18 +109,16 @@ def _heuristic_breakdown(img, session_id: Optional[str] = None) -> Dict[str, flo
 
 
 def _aggregate(b: Dict[str, float]) -> float:
-    """Weighted combination of signals."""
     return float(
-        0.20 * b["sharpness"] +
-        0.15 * b["saturation"] +
-        0.25 * b["edge_density"] +
+        0.15 * b["sharpness"] +
+        0.10 * b["saturation"] +
+        0.30 * b["edge_density"] +
         0.15 * b["reflection"] +
-        0.25 * b["motion"]
+        0.30 * b["motion"]
     )
 
 
 def is_live(img, session_id: Optional[str] = None) -> Tuple[bool, float, Dict[str, float]]:
-    """Returns (is_live, score, breakdown). breakdown helps debug."""
     if MOCK_AI:
         seed = int(np.asarray(img).sum()) & 0xFFFFFFFF
         rng = np.random.default_rng(seed)

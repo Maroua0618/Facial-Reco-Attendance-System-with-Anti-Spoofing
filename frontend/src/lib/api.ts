@@ -20,6 +20,7 @@ export interface RecognizeResult {
   confidence?: number;
   is_live: boolean;
   live_conf: number;
+  liveness_breakdown?: Record<string, number>;
 }
 
 export async function recognizeFace(
@@ -39,7 +40,7 @@ export interface BackendHealth {
   ok: boolean;
   ts: number;
   face_service: { mock: boolean; loaded: boolean; error: string | null };
-  anti_spoofing: { mock: boolean; loaded: boolean; error: string | null; threshold: number };
+  anti_spoofing: { mock: boolean; mode: string; loaded: boolean; error: string | null; threshold: number };
 }
 
 export async function backendHealth(): Promise<BackendHealth> {
