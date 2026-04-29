@@ -4,7 +4,7 @@ from supabase import create_client, Client
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
-DB_SCHEMA = os.getenv("DB_SCHEMA", "nour_demo")
+DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
 MOCK_AI = os.getenv("MOCK_AI", "true").lower() == "true"
 FACE_THRESHOLD = float(os.getenv("FACE_THRESHOLD", "0.5"))
 SPOOF_THRESHOLD = float(os.getenv("SPOOF_THRESHOLD", "0.5"))
