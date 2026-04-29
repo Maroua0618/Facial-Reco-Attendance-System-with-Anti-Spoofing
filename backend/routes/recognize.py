@@ -2,10 +2,11 @@ import logging
 import numpy as np
 import cv2
 from datetime import datetime, timezone
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from services.face_service import get_embedding, match_student
 from services.anti_spoofing import is_live
 from services.db_service import upsert_attendance, write_spoof
+from services.auth import require_auth
 
 router = APIRouter()
 log = logging.getLogger("recognize")
@@ -17,6 +18,7 @@ async def recognize_endpoint(
     image: UploadFile = File(...),
     session_id: str = Form(...),
     group_id: str = Form(...),
+    user: dict = Depends(require_auth),
 ):
     raw = await image.read()
     arr = np.frombuffer(raw, np.uint8)

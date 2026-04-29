@@ -1,4 +1,12 @@
+import { supabase } from '@/integrations/supabase/client';
+
 const FASTAPI_URL = (import.meta.env.VITE_FASTAPI_URL as string | undefined) ?? 'http://localhost:8000';
+
+async function authHeaders(): Promise<HeadersInit> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export interface EmbedResult {
   embedding: number[];
@@ -8,7 +16,11 @@ export interface EmbedResult {
 export async function embedFace(image: Blob): Promise<EmbedResult> {
   const fd = new FormData();
   fd.append('image', image, 'frame.jpg');
-  const r = await fetch(`${FASTAPI_URL}/embed`, { method: 'POST', body: fd });
+  const r = await fetch(`${FASTAPI_URL}/embed`, {
+    method: 'POST',
+    body: fd,
+    headers: await authHeaders(),
+  });
   if (!r.ok) throw new Error(`embed failed: ${r.status} ${await r.text()}`);
   return r.json();
 }
@@ -31,7 +43,11 @@ export async function recognizeFace(
   fd.append('image', image, 'frame.jpg');
   fd.append('session_id', params.session_id);
   fd.append('group_id', params.group_id);
-  const r = await fetch(`${FASTAPI_URL}/recognize`, { method: 'POST', body: fd });
+  const r = await fetch(`${FASTAPI_URL}/recognize`, {
+    method: 'POST',
+    body: fd,
+    headers: await authHeaders(),
+  });
   if (!r.ok) throw new Error(`recognize failed: ${r.status} ${await r.text()}`);
   return r.json();
 }
