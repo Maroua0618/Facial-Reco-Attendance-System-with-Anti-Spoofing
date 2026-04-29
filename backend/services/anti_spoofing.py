@@ -1,5 +1,6 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 import os
+import time
 import logging
 import numpy as np
 from config import MOCK_AI, SPOOF_THRESHOLD
@@ -12,6 +13,11 @@ MODEL_PATH = os.getenv("SPOOF_MODEL_PATH", "ai/anti_spoofing/model.onnx")
 _session = None
 _load_err: Optional[str] = None
 _tried_load = False
+
+# Per-session previous-frame cache for motion check.
+# key: session_id -> (timestamp, downscaled_gray_frame)
+_prev_frames: Dict[str, Tuple[float, np.ndarray]] = {}
+_PREV_FRAME_TTL = 30.0  # seconds; drop stale entries
 
 
 def _ensure_loaded():
@@ -43,50 +49,94 @@ def anti_spoofing_status():
     }
 
 
-def _heuristic_liveness(img) -> float:
-    """Cheap passive liveness based on physical properties of real faces.
-    Combines four signals into a [0,1] score. Catches the cheapest
-    spoofs (printed photos, low-quality screen replays). Not a
-    substitute for a real anti-spoof model.
-    """
+def _heuristic_breakdown(img, session_id: Optional[str] = None) -> Dict[str, float]:
+    """Compute individual liveness signals. Returns dict of [0,1] scores."""
     import cv2
     h, w = img.shape[:2]
-
-    # 1) Sharpness: printed photos and screens often produce blurry crops
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-    sharpness = min(1.0, lap_var / 200.0)  # ~200 = sharp; <50 = blurry
 
-    # 2) Color saturation: greyscale prints score very low
+    # 1) Sharpness window: penalize both blurry and too-sharp.
+    # Real face: Laplacian variance ~80-350. Screen: often 400-1200.
+    lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    if lap_var < 60:
+        sharpness = 0.2  # blurry photo
+    elif lap_var > 450:
+        sharpness = 0.3  # too sharp -> LCD grid
+    else:
+        sharpness = 1.0
+
+    # 2) Saturation: real skin sits in a narrow band
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     sat = float(hsv[:, :, 1].mean()) / 255.0
-    saturation_score = min(1.0, sat * 3.0)  # real skin ~0.2-0.4
+    if 0.12 <= sat <= 0.55:
+        saturation_score = 1.0
+    else:
+        saturation_score = 0.3
 
-    # 3) Face area ratio: a tiny face suggests a photo within frame
-    # (We don't run detection here; assume CameraFeed cropped to roughly fill.)
-    area_score = 1.0 if h * w >= 320 * 240 else 0.5
+    # 3) Edge density: LCDs emit pixel-grid edges everywhere
+    edges = cv2.Canny(gray, 100, 200)
+    edge_ratio = float(edges.mean()) / 255.0
+    if edge_ratio < 0.15:
+        edge_score = 1.0
+    else:
+        edge_score = max(0.0, 1.0 - (edge_ratio - 0.15) * 8.0)
 
-    # 4) Highlight peaks: screens reflect harshly, printed photos rarely do.
-    # Penalize if too many near-saturated pixels in a small area.
-    bright = (gray > 240).mean()
-    reflection_score = 1.0 - min(1.0, bright * 5.0)
+    # 4) Reflection / hot-spot peaks: stricter than before
+    bright_ratio = float((gray > 240).mean())
+    reflection_score = 1.0 - min(1.0, bright_ratio * 12.0)
 
-    # Weighted average
-    score = (
-        0.40 * sharpness +
-        0.30 * saturation_score +
-        0.10 * area_score +
-        0.20 * reflection_score
+    # 5) Inter-frame motion (per session): photos are static
+    motion_score = 1.0  # default if no prior frame
+    if session_id:
+        small = cv2.resize(gray, (64, 64))
+        prev = _prev_frames.get(session_id)
+        # Drop stale
+        now = time.time()
+        for k in list(_prev_frames.keys()):
+            if now - _prev_frames[k][0] > _PREV_FRAME_TTL:
+                del _prev_frames[k]
+        if prev is not None:
+            diff = float(np.abs(small.astype(np.int16) - prev[1].astype(np.int16)).mean()) / 255.0
+            # Real face: 0.005-0.05 typical between consecutive frames at 1fps.
+            # Static photo on phone: <0.002.
+            if diff > 0.008:
+                motion_score = 1.0
+            elif diff > 0.003:
+                motion_score = 0.6
+            else:
+                motion_score = 0.1  # static -> very suspect
+        _prev_frames[session_id] = (now, small)
+
+    return {
+        "sharpness": sharpness,
+        "saturation": saturation_score,
+        "edge_density": edge_score,
+        "reflection": reflection_score,
+        "motion": motion_score,
+        "_lap_var": lap_var,
+        "_edge_ratio": edge_ratio,
+        "_bright_ratio": bright_ratio,
+    }
+
+
+def _aggregate(b: Dict[str, float]) -> float:
+    """Weighted combination of signals."""
+    return float(
+        0.20 * b["sharpness"] +
+        0.15 * b["saturation"] +
+        0.25 * b["edge_density"] +
+        0.15 * b["reflection"] +
+        0.25 * b["motion"]
     )
-    return float(max(0.0, min(1.0, score)))
 
 
-def is_live(img) -> Tuple[bool, float]:
+def is_live(img, session_id: Optional[str] = None) -> Tuple[bool, float, Dict[str, float]]:
+    """Returns (is_live, score, breakdown). breakdown helps debug."""
     if MOCK_AI:
-        # Deterministic mock: always live with high confidence.
         seed = int(np.asarray(img).sum()) & 0xFFFFFFFF
         rng = np.random.default_rng(seed)
-        return True, float(rng.uniform(0.85, 0.99))
+        s = float(rng.uniform(0.85, 0.99))
+        return True, s, {"mock": s}
     _ensure_loaded()
     if _session is not None:
         import cv2
@@ -94,7 +144,7 @@ def is_live(img) -> Tuple[bool, float]:
         x = np.transpose(x, (2, 0, 1))[None]
         out = _session.run(None, {_session.get_inputs()[0].name: x})[0].flatten()
         score = float(out[1] if out.size >= 2 else out[0])
-        return score >= SPOOF_THRESHOLD, score
-    # No ONNX — use heuristic.
-    score = _heuristic_liveness(img)
-    return score >= SPOOF_THRESHOLD, score
+        return score >= SPOOF_THRESHOLD, score, {"onnx": score}
+    b = _heuristic_breakdown(img, session_id=session_id)
+    score = _aggregate(b)
+    return score >= SPOOF_THRESHOLD, score, b

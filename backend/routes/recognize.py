@@ -24,19 +24,27 @@ async def recognize_endpoint(
     if img is None:
         raise HTTPException(400, "Invalid image")
 
-    live, live_conf = is_live(img)
+    live, live_conf, breakdown = is_live(img, session_id=session_id)
     vec = get_embedding(img)
     now = datetime.now(timezone.utc).isoformat()
 
     if vec is None:
-        return {"ok": False, "reason": "no_face", "is_live": live, "live_conf": live_conf}
+        return {
+            "ok": False, "reason": "no_face",
+            "is_live": live, "live_conf": live_conf,
+            "liveness_breakdown": breakdown,
+        }
 
     if not live:
         try:
             write_spoof(session_id=session_id, confidence=float(live_conf), at=now)
         except Exception as e:
             log.error("write_spoof failed: %s", e)
-        return {"ok": False, "reason": "spoof", "is_live": False, "live_conf": live_conf}
+        return {
+            "ok": False, "reason": "spoof",
+            "is_live": False, "live_conf": live_conf,
+            "liveness_breakdown": breakdown,
+        }
 
     try:
         match = match_student(vec, group_id=group_id)
@@ -44,7 +52,11 @@ async def recognize_endpoint(
         log.error("match_student failed: %s", e)
         match = None
     if not match:
-        return {"ok": False, "reason": "unknown", "is_live": True, "live_conf": live_conf}
+        return {
+            "ok": False, "reason": "unknown",
+            "is_live": True, "live_conf": live_conf,
+            "liveness_breakdown": breakdown,
+        }
 
     try:
         upsert_attendance(
@@ -62,4 +74,5 @@ async def recognize_endpoint(
         "confidence": match["confidence"],
         "is_live": True,
         "live_conf": live_conf,
+        "liveness_breakdown": breakdown,
     }
