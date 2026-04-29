@@ -16,22 +16,43 @@ export function CameraFeed({ onReady, onFrame, intervalMs, className }: Props) {
 
   useEffect(() => {
     let stream: MediaStream | null = null;
+    let cancelled = false;
+
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-          setStreaming(true);
-          onReady?.(videoRef.current);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
         }
+        const v = videoRef.current;
+        if (!v) return;
+        v.srcObject = stream;
+        try {
+          await v.play();
+        } catch (err) {
+          // React StrictMode remount can interrupt the first play() promise.
+          // Browser surfaces it as AbortError. Ignore it.
+          const name = (err as { name?: string })?.name;
+          if (name && name !== 'AbortError') throw err;
+        }
+        if (cancelled) return;
+        setStreaming(true);
+        onReady?.(v);
       } catch (e: unknown) {
+        if (cancelled) return;
         const msg = e instanceof Error ? e.message : 'Camera access denied';
         setError(msg);
       }
     })();
+
     return () => {
+      cancelled = true;
       stream?.getTracks().forEach((t) => t.stop());
+      const v = videoRef.current;
+      if (v) v.srcObject = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -55,7 +76,7 @@ export function CameraFeed({ onReady, onFrame, intervalMs, className }: Props) {
   return (
     <Card className={className}>
       <div className="relative aspect-video bg-black rounded overflow-hidden">
-        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
         <canvas ref={canvasRef} className="hidden" />
         {error && (
           <div className="absolute inset-0 flex items-center justify-center text-destructive bg-background/80 text-sm p-4 text-center">
