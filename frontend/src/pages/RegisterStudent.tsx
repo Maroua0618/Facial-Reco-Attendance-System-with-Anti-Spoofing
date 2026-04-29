@@ -17,6 +17,11 @@ import { supabase } from '@/integrations/supabase/client';
 
 const SHOTS = 5;
 
+// pgvector accepts text literal '[1.2,3.4,...]' reliably across the JSON wire.
+function toVectorLiteral(v: number[]): string {
+  return '[' + v.map((x) => x.toFixed(6)).join(',') + ']';
+}
+
 export default function RegisterStudent() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -70,7 +75,7 @@ export default function RegisterStudent() {
       if (embeddings.length > 0) {
         const rows = embeddings.map((emb) => ({
           student_id: stu.id,
-          embedding: emb,
+          embedding: toVectorLiteral(emb),
         }));
         const { error: e3 } = await supabase.from('student_embeddings').insert(rows as never);
         if (e3) throw new Error(e3.message);
