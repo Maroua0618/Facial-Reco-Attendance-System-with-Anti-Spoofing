@@ -78,10 +78,7 @@ function adaptAttendance(r: any): Attendance {
   };
 }
 
-// ---------- in-memory audit log (until we add a DB table) ----------
-const auditLog: AuditLogEntry[] = [];
-
-// ---------- low-level fetchers (one round-trip each, no caching) ----------
+// ---------- low-level fetchers ----------
 async function fetchAll<T>(table: string, adapter: (r: any) => T): Promise<T[]> {
   const { data, error } = await supabase.from(table).select('*');
   if (error) { console.error(`fetch ${table}`, error); return []; }
@@ -91,10 +88,11 @@ async function fetchAll<T>(table: string, adapter: (r: any) => T): Promise<T[]> 
 // ---------- helpers ----------
 async function getCurrentTeacher(): Promise<Teacher | null> {
   const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return null;
-  const { data: rows } = await supabase
-    .from('teachers').select('*').eq('auth_user_id', u.user.id).maybeSingle();
-  if (rows) return adaptTeacher(rows);
+  if (u.user) {
+    const { data: rows } = await supabase
+      .from('teachers').select('*').eq('auth_user_id', u.user.id).maybeSingle();
+    if (rows) return adaptTeacher(rows);
+  }
   // fallback: pretend signed-in user is admin from seed
   const teachers = await fetchAll('teachers', adaptTeacher);
   return teachers.find((t) => t.role === 'admin') ?? teachers[0] ?? null;
@@ -488,29 +486,15 @@ export const api = {
     );
     if (error) { console.error('upsert attendance', error); throw error; }
 
-    const [{ data: sessRow }, { data: studRow }] = await Promise.all([
-      supabase.from('sessions').select('*').eq('id', sessionId).maybeSingle(),
-      supabase.from('students').select('*').eq('id', studentId).maybeSingle(),
-    ]);
-    if (!sessRow || !studRow) return;
-    const sess = adaptSession(sessRow);
-    const stu = adaptStudent(studRow);
-    const [modulesAll, groupsAll] = await Promise.all([
-      fetchAll<Module>('modules', adaptModule),
-      fetchAll<Group>('groups', adaptGroup),
-    ]);
-    const actor = (await getCurrentTeacher()) ?? {
-      id: '', full_name: 'Unknown', email: '', role: 'teacher', created_at: '',
-    } as Teacher;
-    auditLog.unshift({
-      id: crypto.randomUUID(),
-      at: now, actor, session: sess,
-      module: modulesAll.find((m) => m.id === sess.module_id)!,
-      group: groupsAll.find((g) => g.id === sess.group_id)!,
-      student: stu,
+    const actor = await getCurrentTeacher();
+    const { error: e2 } = await supabase.from('audit_log').insert({
+      actor_id: actor?.id ?? null,
+      session_id: sessionId,
+      student_id: studentId,
       prev_status: prevStatus,
       new_status: newStatus,
     });
+    if (e2) console.error('audit_log insert', e2);
   },
 
   async getSpoofLog(f: DashboardFilters = {}): Promise<SpoofLogEntry[]> {
@@ -541,7 +525,36 @@ export const api = {
   },
 
   async getAuditLog(limit = 100): Promise<AuditLogEntry[]> {
-    return auditLog.slice(0, limit);
+    const [{ data: rows }, sessionsAll, modulesAll, groupsAll, studentsAll, teachersAll] =
+      await Promise.all([
+        supabase.from('audit_log').select('*').order('at', { ascending: false }).limit(limit),
+        fetchAll<Session>('sessions', adaptSession),
+        fetchAll<Module>('modules', adaptModule),
+        fetchAll<Group>('groups', adaptGroup),
+        fetchAll<Student>('students', adaptStudent),
+        fetchAll<Teacher>('teachers', adaptTeacher),
+      ]);
+    if (!rows) return [];
+    return rows.map((r: any) => {
+      const sess = sessionsAll.find((s) => s.id === r.session_id);
+      const stu = studentsAll.find((s) => s.id === r.student_id);
+      const actor =
+        teachersAll.find((t) => t.id === r.actor_id) ??
+        ({ id: '', full_name: 'Unknown', email: '', role: 'teacher', created_at: '' } as Teacher);
+      const mod = sess ? modulesAll.find((m) => m.id === sess.module_id) : undefined;
+      const grp = sess ? groupsAll.find((g) => g.id === sess.group_id) : undefined;
+      return {
+        id: r.id,
+        at: r.at,
+        actor,
+        session: sess!,
+        module: mod!,
+        group: grp!,
+        student: stu!,
+        prev_status: (r.prev_status ?? 'not_marked') as AuditLogEntry['prev_status'],
+        new_status: r.new_status as AttendanceStatus,
+      };
+    }).filter((e) => e.session && e.student && e.module && e.group);
   },
 
   async getSystemHealth(): Promise<SystemHealth> {
