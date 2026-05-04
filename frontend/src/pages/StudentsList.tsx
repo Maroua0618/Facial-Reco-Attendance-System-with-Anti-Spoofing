@@ -1,13 +1,18 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Search, UserPlus } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Search, UserPlus, Pencil, Trash2 } from 'lucide-react';
 import { api } from '@/lib/mock-data';
+import { toast } from 'sonner';
 
 interface Row {
   id: string;
@@ -18,10 +23,16 @@ interface Row {
   group_name: string;
 }
 
+interface EditState { id: string; full_name: string; student_number: string }
+
 export default function StudentsList() {
   const [q, setQ] = useState('');
+  const [editStudent, setEditStudent] = useState<EditState | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const qc = useQueryClient();
+
   const { data: groups = [] } = useQuery({ queryKey: ['groups'], queryFn: api.getGroups });
-  const { data: rows = [] } = useQuery<Row[]>({
+  const { data: rows = [], isLoading } = useQuery<Row[]>({
     queryKey: ['students-flat', groups.map((g) => g.id)],
     enabled: groups.length > 0,
     queryFn: async () => {
@@ -38,6 +49,33 @@ export default function StudentsList() {
             }))
           : [],
       );
+    },
+  });
+
+  const editMut = useMutation({
+    mutationFn: () =>
+      api.updateStudent(editStudent!.id, {
+        full_name: editStudent!.full_name,
+        student_number: editStudent!.student_number,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['students-flat'] });
+      setEditStudent(null);
+      toast.success('Student updated');
+    },
+    onError: () => toast.error('Failed to update student'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.deleteStudent(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['students-flat'] });
+      setDeleteId(null);
+      toast.success('Student deleted');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to delete student');
+      setDeleteId(null);
     },
   });
 
@@ -76,6 +114,7 @@ export default function StudentsList() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {isLoading && <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -83,7 +122,7 @@ export default function StudentsList() {
                   <TableHead>Name</TableHead>
                   <TableHead>Group</TableHead>
                   <TableHead>Rate</TableHead>
-                  <TableHead></TableHead>
+                  <TableHead className="w-[140px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -98,9 +137,26 @@ export default function StudentsList() {
                     </TableCell>
                     <TableCell>{(s.attendance_rate * 100).toFixed(1)}%</TableCell>
                     <TableCell>
-                      <Button size="sm" variant="ghost" asChild>
-                        <Link to={`/students/${s.id}`}>View</Link>
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" variant="ghost" asChild>
+                          <Link to={`/students/${s.id}`}>View</Link>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setEditStudent({ id: s.id, full_name: s.full_name, student_number: s.matricule })}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeleteId(s.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -109,6 +165,64 @@ export default function StudentsList() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit dialog */}
+      <Dialog open={!!editStudent} onOpenChange={(open) => { if (!open) setEditStudent(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Student</DialogTitle>
+          </DialogHeader>
+          {editStudent && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editStudent.full_name}
+                  onChange={(e) => setEditStudent({ ...editStudent, full_name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-matricule">Matricule</Label>
+                <Input
+                  id="edit-matricule"
+                  value={editStudent.student_number}
+                  onChange={(e) => setEditStudent({ ...editStudent, student_number: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditStudent(null)}>Cancel</Button>
+            <Button onClick={() => editMut.mutate()} disabled={editMut.isPending}>
+              {editMut.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm dialog */}
+      <Dialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Student</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            This will permanently delete the student and all their group memberships.
+            Attendance records linked to this student will block deletion — you must remove them first.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteId && deleteMut.mutate(deleteId)}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
