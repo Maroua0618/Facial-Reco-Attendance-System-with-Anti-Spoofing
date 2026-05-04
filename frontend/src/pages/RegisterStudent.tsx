@@ -72,6 +72,28 @@ export default function RegisterStudent() {
         .insert({ student_id: stu.id, group_id: groupId });
       if (e2) throw new Error(e2.message);
 
+      // Capture a photo from the live feed (non-blocking — failure won't abort registration)
+      if (video) {
+        try {
+          const photoCanvas = document.createElement('canvas');
+          photoCanvas.width = video.videoWidth;
+          photoCanvas.height = video.videoHeight;
+          photoCanvas.getContext('2d')!.drawImage(video, 0, 0);
+          const photoBlob: Blob = await new Promise((res) =>
+            photoCanvas.toBlob((b) => res(b!), 'image/jpeg', 0.85),
+          );
+          await supabase.storage
+            .from('student-photos')
+            .upload(`${stu.id}.jpg`, photoBlob, { contentType: 'image/jpeg', upsert: true });
+          const { data: { publicUrl } } = supabase.storage
+            .from('student-photos')
+            .getPublicUrl(`${stu.id}.jpg`);
+          await supabase.from('students').update({ photo_url: publicUrl }).eq('id', stu.id);
+        } catch {
+          // photo upload is non-blocking
+        }
+      }
+
       if (embeddings.length > 0) {
         const rows = embeddings.map((emb) => ({
           student_id: stu.id,
@@ -137,11 +159,17 @@ export default function RegisterStudent() {
                 <Progress value={(embeddings.length / SHOTS) * 100} />
               </div>
               <div className="flex gap-2">
-                <Button onClick={captureShot} disabled={busy || !video || embeddings.length >= SHOTS} className="flex-1">
+                <Button
+                  onClick={captureShot}
+                  disabled={busy || !video || embeddings.length >= SHOTS}
+                  className="flex-1"
+                >
                   <Camera className="w-4 h-4 mr-1" /> Capture
                 </Button>
                 <Button onClick={() => register.mutate()} disabled={!canSubmit}>
-                  {register.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                  {register.isPending
+                    ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    : <CheckCircle2 className="w-4 h-4 mr-1" />}
                   Register
                 </Button>
               </div>

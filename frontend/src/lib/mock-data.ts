@@ -43,6 +43,7 @@ function adaptStudent(r: any): Student {
     student_number: r.student_number,
     full_name: r.full_name,
     email: '',
+    photo_url: r.photo_url ?? null,
     created_at: r.created_at ?? '',
   };
 }

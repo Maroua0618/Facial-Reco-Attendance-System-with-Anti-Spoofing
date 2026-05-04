@@ -40,6 +40,7 @@ export interface Student {
   student_number: string;
   full_name: string;
   email: string | null;
+  photo_url?: string | null;
   created_at: string;
 }
 

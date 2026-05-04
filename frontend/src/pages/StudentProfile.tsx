@@ -103,17 +103,31 @@ export default function StudentProfile() {
             <ArrowLeft className="w-4 h-4 mr-1" /> Back
           </Button>
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold">{student.full_name}</h1>
-              <p className="text-sm text-muted-foreground font-mono mt-0.5">
-                {student.student_number}
-              </p>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {groups.map((g) => (
-                  <Badge key={g.id} variant="secondary">
-                    {g.group_name} · Y{g.year}
-                  </Badge>
-                ))}
+            <div className="flex items-start gap-4">
+              {/* Photo or initials avatar */}
+              {student.photo_url ? (
+                <img
+                  src={student.photo_url}
+                  alt={student.full_name}
+                  className="w-16 h-16 rounded-full object-cover border flex-shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-muted border flex-shrink-0 flex items-center justify-center text-2xl font-bold text-muted-foreground">
+                  {student.full_name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl font-bold">{student.full_name}</h1>
+                <p className="text-sm text-muted-foreground font-mono mt-0.5">
+                  {student.student_number}
+                </p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {groups.map((g) => (
+                    <Badge key={g.id} variant="secondary">
+                      {g.group_name} · Y{g.year}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
