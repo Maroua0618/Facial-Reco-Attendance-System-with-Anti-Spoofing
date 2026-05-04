@@ -28,11 +28,20 @@ export default function Login() {
   const defaultTab = searchParams.get("tab") === "signup" ? "signup" : "login";
   const { session } = useAuth();
 
+  // login
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // forgot password
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [isSendingReset, setIsSendingReset] = useState(false);
+
+  // signup
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
@@ -40,14 +49,13 @@ export default function Login() {
   const [signupError, setSignupError] = useState<string | null>(null);
   const [isSigningUp, setIsSigningUp] = useState(false);
 
+  // otp
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [otp, setOtp] = useState("");
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
 
-  if (session) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  if (session) return <Navigate to="/dashboard" replace />;
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +77,18 @@ export default function Login() {
     setIsLoggingIn(false);
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSendingReset(true);
+    setForgotError(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setIsSendingReset(false);
+    if (error) { setForgotError(error.message); return; }
+    setForgotSent(true);
+  };
+
   const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSigningUp(true);
@@ -76,12 +96,7 @@ export default function Login() {
     const { data, error } = await supabase.auth.signUp({
       email: signupEmail,
       password: signupPassword,
-      options: {
-        data: {
-          full_name: signupName,
-          role: signupRole,
-        },
-      },
+      options: { data: { full_name: signupName, role: signupRole } },
     });
     setIsSigningUp(false);
     if (error) {
@@ -103,11 +118,8 @@ export default function Login() {
       type: "email",
     });
     setIsVerifyingOtp(false);
-    if (error) {
-      setOtpError(error.message);
-    } else {
-      navigate("/dashboard", { replace: true });
-    }
+    if (error) { setOtpError(error.message); }
+    else { navigate("/dashboard", { replace: true }); }
   };
 
   return (
@@ -136,44 +148,92 @@ export default function Login() {
             </TabsList>
 
             <TabsContent value="login">
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                {loginError && (<div className="text-sm font-medium text-destructive">{loginError}</div>)}
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="email" type="email" placeholder="you@ensia.edu.dz" className="pl-10"
-                      value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required
-                    />
+              {!forgotMode ? (
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  {loginError && <div className="text-sm font-medium text-destructive">{loginError}</div>}
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="email" type="email" placeholder="you@ensia.edu.dz" className="pl-10"
+                        value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="password" type={showPassword ? "text" : "password"} placeholder="••••••••"
-                      className="pl-10 pr-10"
-                      value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required
-                    />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">Password</Label>
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                        onClick={() => { setForgotMode(true); setForgotEmail(loginEmail); setForgotSent(false); setForgotError(null); }}
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="password" type={showPassword ? "text" : "password"} placeholder="••••••••"
+                        className="pl-10 pr-10"
+                        value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required
+                      />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
+                  <Button type="submit" className="w-full glow-sm" disabled={isLoggingIn}>
+                    {isLoggingIn ? "Signing In..." : "Sign In"}
+                  </Button>
+                </form>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-base font-medium">Reset your password</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Enter your @ensia.edu.dz email and we’ll send a reset link.
+                    </p>
+                  </div>
+                  {forgotSent ? (
+                    <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
+                      Reset link sent to <strong>{forgotEmail}</strong>. Check your inbox.
+                    </div>
+                  ) : (
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
+                      {forgotError && <div className="text-sm font-medium text-destructive">{forgotError}</div>}
+                      <div className="space-y-2">
+                        <Label htmlFor="forgot-email">Email</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            id="forgot-email" type="email" placeholder="you@ensia.edu.dz" className="pl-10"
+                            value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} required
+                          />
+                        </div>
+                      </div>
+                      <Button type="submit" className="w-full glow-sm" disabled={isSendingReset}>
+                        {isSendingReset ? "Sending..." : "Send reset link"}
+                      </Button>
+                    </form>
+                  )}
+                  <button
+                    type="button"
+                    className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                    onClick={() => setForgotMode(false)}
+                  >
+                    ← Back to login
+                  </button>
                 </div>
-                <Button type="submit" className="w-full glow-sm" disabled={isLoggingIn}>
-                  {isLoggingIn ? "Signing In..." : "Sign In"}
-                </Button>
-              </form>
+              )}
             </TabsContent>
 
             <TabsContent value="signup">
               {!showOtpInput ? (
                 <form onSubmit={handleSignupSubmit} className="space-y-4">
-                  {signupError && (<div className="text-sm font-medium text-destructive">{signupError}</div>)}
-
+                  {signupError && <div className="text-sm font-medium text-destructive">{signupError}</div>}
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name</Label>
                     <Input
@@ -181,7 +241,6 @@ export default function Login() {
                       value={signupName} onChange={(e) => setSignupName(e.target.value)} required
                     />
                   </div>
-
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
                     <div className="relative">
@@ -193,7 +252,6 @@ export default function Login() {
                     </div>
                     <p className="text-[11px] text-muted-foreground">Only @ensia.edu.dz emails can sign up.</p>
                   </div>
-
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
                     <div className="relative">
@@ -209,7 +267,6 @@ export default function Login() {
                       </button>
                     </div>
                   </div>
-
                   <div className="space-y-2">
                     <Label>I am a</Label>
                     <RadioGroup
@@ -243,7 +300,6 @@ export default function Login() {
                       First-ever signup is automatically promoted to admin.
                     </p>
                   </div>
-
                   <Button type="submit" className="w-full glow-sm" disabled={isSigningUp}>
                     {isSigningUp ? "Creating Account..." : "Create Account"}
                   </Button>
@@ -253,10 +309,10 @@ export default function Login() {
                   <div className="text-center mb-4">
                     <h3 className="text-lg font-medium text-foreground">Verify your email</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      We've sent a 6-digit verification code to <span className="text-primary">{signupEmail}</span>.
+                      We’ve sent a 6-digit verification code to <span className="text-primary">{signupEmail}</span>.
                     </p>
                   </div>
-                  {otpError && (<div className="text-sm font-medium text-destructive text-center">{otpError}</div>)}
+                  {otpError && <div className="text-sm font-medium text-destructive text-center">{otpError}</div>}
                   <div className="space-y-2">
                     <Label htmlFor="otp" className="text-center block">Verification Code</Label>
                     <Input
