@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/DashboardLayout';
@@ -8,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronLeft, Camera, Download } from 'lucide-react';
+import { ChevronLeft, Camera, Download, CheckSquare } from 'lucide-react';
 import { api } from '@/lib/mock-data';
 import { downloadCSV, toCSV } from '@/lib/csv';
 import type { AttendanceStatus, RosterEntry } from '@/types/db';
@@ -26,7 +27,12 @@ function statusBadge(status: RosterEntry['status']) {
 export default function SessionDetail() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ['sessionDetail', id], queryFn: () => api.getSessionDetail(id) });
+  const [confirming, setConfirming] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['sessionDetail', id],
+    queryFn: () => api.getSessionDetail(id),
+  });
 
   const overrideMut = useMutation({
     mutationFn: ({ studentId, status }: { studentId: string; status: AttendanceStatus }) =>
@@ -40,6 +46,24 @@ export default function SessionDetail() {
     },
     onError: () => toast.error('Failed to update attendance'),
   });
+
+  const finalizeMut = useMutation({
+    mutationFn: () => api.finalizeSession(id),
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ['sessionDetail', id] });
+      qc.invalidateQueries({ queryKey: ['recent'] });
+      qc.invalidateQueries({ queryKey: ['stats'] });
+      setConfirming(false);
+      toast.success(
+        count === 0
+          ? 'All students already marked — nothing to finalize.'
+          : `Finalized: ${count} student${count === 1 ? '' : 's'} marked absent.`,
+      );
+    },
+    onError: () => { toast.error('Failed to finalize session'); setConfirming(false); },
+  });
+
+  const notMarkedCount = data?.roster.filter((r) => r.status === 'not_marked').length ?? 0;
 
   const exportRoster = () => {
     if (!data) return;
@@ -70,7 +94,7 @@ export default function SessionDetail() {
 
         {data && (
           <>
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
                   <Camera className="w-5 h-5 text-primary" />
@@ -88,9 +112,39 @@ export default function SessionDetail() {
                   </p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={exportRoster}>
-                <Download className="w-4 h-4 mr-1" /> Export CSV
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {!confirming ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirming(true)}
+                    disabled={notMarkedCount === 0}
+                  >
+                    <CheckSquare className="w-4 h-4 mr-1" />
+                    Finalize{notMarkedCount > 0 ? ` (${notMarkedCount} unmarked)` : ''}
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-1.5">
+                    <span className="text-sm text-muted-foreground">
+                      Mark {notMarkedCount} student{notMarkedCount === 1 ? '' : 's'} absent?
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => finalizeMut.mutate()}
+                      disabled={finalizeMut.isPending}
+                    >
+                      {finalizeMut.isPending ? 'Working...' : 'Confirm'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+                <Button variant="outline" size="sm" onClick={exportRoster}>
+                  <Download className="w-4 h-4 mr-1" /> Export CSV
+                </Button>
+              </div>
             </div>
 
             <div className="grid md:grid-cols-4 gap-4">
@@ -103,7 +157,7 @@ export default function SessionDetail() {
             <Card>
               <CardHeader>
                 <CardTitle>Roster</CardTitle>
-                <p className="text-xs text-muted-foreground">Use the dropdown to manually override a student's status.</p>
+                <p className="text-xs text-muted-foreground">Use the dropdown to manually override a student's status. Use Finalize to bulk-mark all unmarked students as absent.</p>
               </CardHeader>
               <CardContent>
                 <Table>

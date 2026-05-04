@@ -95,7 +95,6 @@ async function getCurrentTeacher(): Promise<Teacher | null> {
       .from('teachers').select('*').eq('auth_user_id', u.user.id).maybeSingle();
     if (rows) return adaptTeacher(rows);
   }
-  // fallback: pretend signed-in user is admin from seed
   const teachers = await fetchAll('teachers', adaptTeacher);
   return teachers.find((t) => t.role === 'admin') ?? teachers[0] ?? null;
 }
@@ -670,5 +669,68 @@ export const api = {
       sessions,
       weekly_rates,
     };
+  },
+
+  // ---- session finalization ----
+  async finalizeSession(sessionId: string): Promise<number> {
+    const { data: sRow } = await supabase
+      .from('sessions').select('group_id').eq('id', sessionId).maybeSingle();
+    if (!sRow) return 0;
+    const { data: sgRows } = await supabase
+      .from('student_groups').select('student_id').eq('group_id', (sRow as any).group_id);
+    const allIds: string[] = (sgRows ?? []).map((r: any) => r.student_id);
+    const { data: attRows } = await supabase
+      .from('attendance').select('student_id,status').eq('session_id', sessionId);
+    const done = new Set(
+      (attRows ?? [])
+        .filter((r: any) => r.status === 'present' || r.status === 'spoof')
+        .map((r: any) => r.student_id),
+    );
+    const toMark = allIds.filter((sid) => !done.has(sid));
+    if (toMark.length === 0) return 0;
+    const now = new Date().toISOString();
+    const actor = await getCurrentTeacher();
+    await supabase.from('attendance').upsert(
+      toMark.map((student_id) => ({ session_id: sessionId, student_id, status: 'absent', updated_at: now })),
+      { onConflict: 'session_id,student_id' },
+    );
+    await supabase.from('audit_log').insert(
+      toMark.map((student_id) => ({
+        actor_id: actor?.id ?? null,
+        session_id: sessionId,
+        student_id,
+        prev_status: 'not_marked',
+        new_status: 'absent',
+      })),
+    );
+    return toMark.length;
+  },
+
+  // ---- student CRUD ----
+  async updateStudent(
+    studentId: string,
+    patch: { full_name: string; student_number: string },
+  ): Promise<void> {
+    const { error } = await supabase.from('students').update(patch).eq('id', studentId);
+    if (error) throw error;
+  },
+
+  async deleteStudent(studentId: string): Promise<void> {
+    const { error } = await supabase.from('students').delete().eq('id', studentId);
+    if (error) {
+      if ((error as any).code === '23503')
+        throw new Error('Cannot delete — student has attendance records.');
+      throw error;
+    }
+  },
+
+  // ---- module CRUD ----
+  async deleteModule(moduleId: string): Promise<void> {
+    const { error } = await supabase.from('modules').delete().eq('id', moduleId);
+    if (error) {
+      if ((error as any).code === '23503')
+        throw new Error('Cannot delete — module has linked sessions or groups.');
+      throw error;
+    }
   },
 };
