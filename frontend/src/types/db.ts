@@ -201,3 +201,27 @@ export interface SystemHealth {
   total_marked: number;
   daily_counts: { date: string; recognized: number; spoof: number }[];
 }
+
+// ---- Student profile ----
+
+export interface StudentSessionEntry {
+  session: Session;
+  module: Module;
+  group: Group;
+  status: AttendanceStatus | 'not_marked';
+  confidence: number | null;
+  marked_at: string | null;
+}
+
+export interface StudentProfileData {
+  student: Student;
+  groups: Group[];
+  embedding_count: number;
+  total_sessions: number;
+  attended: number;
+  absent: number;
+  spoof: number;
+  attendance_rate: number;
+  sessions: StudentSessionEntry[];
+  weekly_rates: WeeklyPoint[];
+}

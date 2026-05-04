@@ -22,6 +22,8 @@ import type {
   AuditLogEntry,
   SystemHealth,
   Teacher,
+  StudentSessionEntry,
+  StudentProfileData,
 } from '@/types/db';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -585,6 +587,88 @@ export const api = {
       spoof_rate: total ? spoof.length / total : 0,
       total_marked: total,
       daily_counts,
+    };
+  },
+
+  async getStudentProfile(studentId: string): Promise<StudentProfileData | null> {
+    const [
+      { data: stuRow },
+      sgRows,
+      { data: embRows },
+      sessionsAll,
+      attendanceAll,
+      modulesAll,
+      groupsAll,
+    ] = await Promise.all([
+      supabase.from('students').select('*').eq('id', studentId).maybeSingle(),
+      supabase.from('student_groups').select('group_id').eq('student_id', studentId),
+      supabase.from('student_embeddings').select('id').eq('student_id', studentId),
+      fetchAll<Session>('sessions', adaptSession),
+      fetchAll<Attendance>('attendance', adaptAttendance),
+      fetchAll<Module>('modules', adaptModule),
+      fetchAll<Group>('groups', adaptGroup),
+    ]);
+    if (!stuRow) return null;
+    const student = adaptStudent(stuRow);
+    const groupIds: string[] = (sgRows.data ?? []).map((r: any) => r.group_id);
+    const groups = groupsAll.filter((g) => groupIds.includes(g.id));
+
+    const mySessions = sessionsAll.filter((s) => groupIds.includes(s.group_id));
+    const mySessionIds = new Set(mySessions.map((s) => s.id));
+    const myAtt = attendanceAll.filter(
+      (a) => a.student_id === studentId && mySessionIds.has(a.session_id),
+    );
+    const attBySession = new Map(myAtt.map((a) => [a.session_id, a]));
+
+    const attended = myAtt.filter((a) => a.status === 'present').length;
+    const absent = myAtt.filter((a) => a.status === 'absent').length;
+    const spoof = myAtt.filter((a) => a.status === 'spoof').length;
+
+    const sessions: StudentSessionEntry[] = mySessions
+      .slice()
+      .sort((a, b) =>
+        (b.session_date + b.start_time).localeCompare(a.session_date + a.start_time),
+      )
+      .map((s) => {
+        const a = attBySession.get(s.id);
+        return {
+          session: s,
+          module: modulesAll.find((m) => m.id === s.module_id)!,
+          group: groupsAll.find((g) => g.id === s.group_id)!,
+          status: (a?.status ?? 'not_marked') as AttendanceStatus | 'not_marked',
+          confidence: a?.confidence ?? null,
+          marked_at: a?.marked_at ?? null,
+        };
+      })
+      .filter((e) => e.module && e.group);
+
+    const byWeek = new Map<number, { present: number; total: number }>();
+    for (const s of mySessions) {
+      const a = attBySession.get(s.id);
+      const slot = byWeek.get(s.week) ?? { present: 0, total: 0 };
+      slot.total += 1;
+      if (a?.status === 'present') slot.present += 1;
+      byWeek.set(s.week, slot);
+    }
+    const weekly_rates: WeeklyPoint[] = [...byWeek.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([week, v]) => ({
+        week,
+        attendance_rate: v.total ? v.present / v.total : 0,
+        sessions: v.total,
+      }));
+
+    return {
+      student,
+      groups,
+      embedding_count: (embRows ?? []).length,
+      total_sessions: mySessions.length,
+      attended,
+      absent,
+      spoof,
+      attendance_rate: mySessions.length ? attended / mySessions.length : 0,
+      sessions,
+      weekly_rates,
     };
   },
 };
