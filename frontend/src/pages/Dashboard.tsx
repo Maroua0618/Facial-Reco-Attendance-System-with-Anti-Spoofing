@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent } from '@/components/ui/card';
+import { Download, BookOpen } from 'lucide-react';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { WeeklyAttendanceChart } from '@/components/dashboard/WeeklyAttendanceChart';
 import { ModuleRateChart } from '@/components/dashboard/ModuleRateChart';
@@ -20,23 +23,36 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function Dashboard() {
   const [filters, setFilters] = useState<Filters>({});
+  const navigate = useNavigate();
   const { user } = useAuth();
   const rawFullName = user?.user_metadata?.full_name;
   const fullName =
     typeof rawFullName === 'string' && rawFullName.trim() !== '' ? rawFullName : 'Teacher';
 
-  const { data: modules = [] }   = useQuery({ queryKey: ['modules'], queryFn: api.getModules });
-  const { data: groups = [] }    = useQuery({ queryKey: ['groups'],  queryFn: api.getGroups });
-  const { data: stats }          = useQuery({ queryKey: ['stats', filters],    queryFn: () => api.getStats(filters) });
-  const { data: weekly = [] }    = useQuery({ queryKey: ['weekly', filters],   queryFn: () => api.getWeeklyAttendance(filters) });
-  const { data: byModule = [] }  = useQuery({ queryKey: ['byModule', filters], queryFn: () => api.getAttendanceRateByModule(filters) });
-  const { data: recent = [] }    = useQuery({ queryKey: ['recent', filters],   queryFn: () => api.getRecentSessions(filters, 10) });
-  const { data: trend }          = useQuery({ queryKey: ['trend', filters],    queryFn: () => api.getTrend(filters) });
-  const { data: ranking }        = useQuery({ queryKey: ['ranking', filters],  queryFn: () => api.getStudentRanking(filters, 5) });
-  const { data: heatmap = [] }   = useQuery({ queryKey: ['heatmap', filters],  queryFn: () => api.getHeatmap(filters) });
-  const { data: today = [] }     = useQuery({ queryKey: ['today'],             queryFn: () => api.getTodaySessions() });
-  const { data: live }           = useQuery({ queryKey: ['live'],              queryFn: () => api.getLiveSession() });
-  const { data: health }         = useQuery({ queryKey: ['health'],            queryFn: () => api.getSystemHealth() });
+  const { data: modules = [], isPending: modulesLoading } =
+    useQuery({ queryKey: ['modules'], queryFn: api.getModules });
+  const { data: groups = [] } =
+    useQuery({ queryKey: ['groups'],  queryFn: api.getGroups });
+  const { data: stats, isPending: statsLoading } =
+    useQuery({ queryKey: ['stats', filters],    queryFn: () => api.getStats(filters) });
+  const { data: weekly = [] } =
+    useQuery({ queryKey: ['weekly', filters],   queryFn: () => api.getWeeklyAttendance(filters) });
+  const { data: byModule = [] } =
+    useQuery({ queryKey: ['byModule', filters], queryFn: () => api.getAttendanceRateByModule(filters) });
+  const { data: recent = [] } =
+    useQuery({ queryKey: ['recent', filters],   queryFn: () => api.getRecentSessions(filters, 10) });
+  const { data: trend } =
+    useQuery({ queryKey: ['trend', filters],    queryFn: () => api.getTrend(filters) });
+  const { data: ranking } =
+    useQuery({ queryKey: ['ranking', filters],  queryFn: () => api.getStudentRanking(filters, 5) });
+  const { data: heatmap = [] } =
+    useQuery({ queryKey: ['heatmap', filters],  queryFn: () => api.getHeatmap(filters) });
+  const { data: today = [] } =
+    useQuery({ queryKey: ['today'],             queryFn: () => api.getTodaySessions() });
+  const { data: live } =
+    useQuery({ queryKey: ['live'],              queryFn: () => api.getLiveSession() });
+  const { data: health } =
+    useQuery({ queryKey: ['health'],            queryFn: () => api.getSystemHealth() });
 
   const exportRecent = () => {
     const rows = recent.map((r) => ({
@@ -56,15 +72,15 @@ export default function Dashboard() {
     downloadCSV(`recent-sessions-${new Date().toISOString().slice(0, 10)}.csv`, csv);
   };
 
+  const isEmpty = !modulesLoading && modules.length === 0;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">{fullName}'s Dashboard</h1>
-            <p className="text-sm text-muted-foreground">
-              Attendance overview · using mock data until DB migration is applied
-            </p>
+            <p className="text-sm text-muted-foreground">Attendance overview</p>
           </div>
           <div className="flex items-center gap-2">
             <DashboardFilters
@@ -79,28 +95,62 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {stats && <StatsCards stats={stats} />}
+        {/* Stats cards with skeleton while loading */}
+        {statsLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : stats ? (
+          <StatsCards stats={stats} />
+        ) : null}
 
-        <div className="grid lg:grid-cols-3 gap-4">
-          <TodayScheduleCard rows={today} liveSessionId={live?.row.session.id} />
-          <LiveSessionCard data={live ?? null} />
-          <TrendBadge trend={trend ?? null} />
-        </div>
+        {/* Empty state — no modules yet */}
+        {isEmpty && (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <BookOpen className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-lg">No modules yet</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Create your first module to start tracking attendance.
+                </p>
+              </div>
+              <Button onClick={() => navigate('/modules/add')}>
+                Add your first module
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
-        <div className="grid lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2"><WeeklyAttendanceChart data={weekly} /></div>
-          <SystemHealthCard health={health} />
-        </div>
+        {/* Rest of dashboard — only show when there's data */}
+        {!isEmpty && (
+          <>
+            <div className="grid lg:grid-cols-3 gap-4">
+              <TodayScheduleCard rows={today} liveSessionId={live?.row.session.id} />
+              <LiveSessionCard data={live ?? null} />
+              <TrendBadge trend={trend ?? null} />
+            </div>
 
-        <div className="grid lg:grid-cols-2 gap-4">
-          <ModuleRateChart data={byModule} />
-          <AttendanceHeatmap cells={heatmap} />
-        </div>
+            <div className="grid lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2"><WeeklyAttendanceChart data={weekly} /></div>
+              <SystemHealthCard health={health} />
+            </div>
 
-        <div className="grid lg:grid-cols-3 gap-4">
-          <StudentRankingPanel worst={ranking?.worst ?? []} best={ranking?.best ?? []} />
-          <div className="lg:col-span-2"><RecentSessionsTable rows={recent} /></div>
-        </div>
+            <div className="grid lg:grid-cols-2 gap-4">
+              <ModuleRateChart data={byModule} />
+              <AttendanceHeatmap cells={heatmap} />
+            </div>
+
+            <div className="grid lg:grid-cols-3 gap-4">
+              <StudentRankingPanel worst={ranking?.worst ?? []} best={ranking?.best ?? []} />
+              <div className="lg:col-span-2"><RecentSessionsTable rows={recent} /></div>
+            </div>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );
