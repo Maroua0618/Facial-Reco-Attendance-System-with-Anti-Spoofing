@@ -14,7 +14,8 @@ type RoleChoice = "teacher" | "lecturer";
 
 function friendlySignupError(msg: string | undefined): string {
   if (!msg) return "Sign-up failed.";
-  if (msg.toLowerCase().includes("@ensia.edu.dz")) {
+  const lower = msg.toLowerCase();
+  if (lower.includes("@ensia.edu.dz") || lower.includes("database error")) {
     return "Sign-up is restricted to @ensia.edu.dz email addresses.";
   }
   return msg;
