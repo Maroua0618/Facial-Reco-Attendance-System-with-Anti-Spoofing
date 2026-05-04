@@ -1,3 +1,4 @@
+import type { ElementType } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/DashboardLayout';
@@ -16,7 +17,7 @@ import type { AttendanceStatus } from '@/types/db';
 
 const STATUS_CONFIG: Record<
   AttendanceStatus | 'not_marked',
-  { label: string; icon: React.ElementType; className: string }
+  { label: string; icon: ElementType; className: string }
 > = {
   present:    { label: 'Present',    icon: CheckCircle2,  className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
   absent:     { label: 'Absent',     icon: XCircle,       className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
