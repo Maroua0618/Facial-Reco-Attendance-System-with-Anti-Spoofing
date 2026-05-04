@@ -1,13 +1,16 @@
-import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronLeft, BookOpen, Download } from 'lucide-react';
+import { ChevronLeft, BookOpen, Download, Trash2 } from 'lucide-react';
 import { api } from '@/lib/mock-data';
 import { downloadCSV, toCSV } from '@/lib/csv';
+import { toast } from 'sonner';
 
 function rateColor(r: number): 'default' | 'secondary' | 'destructive' {
   return r >= 0.85 ? 'default' : r >= 0.7 ? 'secondary' : 'destructive';
@@ -15,7 +18,28 @@ function rateColor(r: number): 'default' | 'secondary' | 'destructive' {
 
 export default function ModuleDetail() {
   const { id = '' } = useParams();
-  const { data, isLoading } = useQuery({ queryKey: ['moduleDetail', id], queryFn: () => api.getModuleDetail(id) });
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['moduleDetail', id],
+    queryFn: () => api.getModuleDetail(id),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: () => api.deleteModule(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modules'] });
+      qc.invalidateQueries({ queryKey: ['stats'] });
+      toast.success('Module deleted');
+      navigate('/dashboard');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to delete module');
+      setDeleteOpen(false);
+    },
+  });
 
   const exportGroups = () => {
     if (!data) return;
@@ -45,7 +69,7 @@ export default function ModuleDetail() {
 
         {data && (
           <>
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
                   <BookOpen className="w-5 h-5 text-primary" />
@@ -57,9 +81,19 @@ export default function ModuleDetail() {
                   </p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={exportGroups}>
-                <Download className="w-4 h-4 mr-1" /> Export CSV
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={exportGroups}>
+                  <Download className="w-4 h-4 mr-1" /> Export CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive border-destructive/40 hover:border-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" /> Delete
+                </Button>
+              </div>
             </div>
 
             <div className="grid md:grid-cols-3 gap-4">
@@ -101,6 +135,28 @@ export default function ModuleDetail() {
           </>
         )}
       </div>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Module</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            Permanently delete <strong>{data?.module.module_code}</strong>?
+            This will fail if the module has linked sessions or groups — remove those first.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteMut.mutate()}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
