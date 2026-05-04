@@ -102,7 +102,9 @@ export default function Login() {
     if (error) {
       setSignupError(friendlySignupError(error.message));
     } else if (data?.user && data.user.identities && data.user.identities.length === 0) {
-      setSignupError("This email address is already in use.");
+      // Email already exists in auth but unconfirmed — resend the code and go to OTP screen
+      await supabase.auth.resend({ type: 'signup', email: signupEmail });
+      setShowOtpInput(true);
     } else {
       setShowOtpInput(true);
     }
@@ -175,7 +177,7 @@ export default function Login() {
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
-                        id="password" type={showPassword ? "text" : "password"} placeholder="••••••••"
+                        id="password" type={showPassword ? "text" : "password"} placeholder="········"
                         className="pl-10 pr-10"
                         value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required
                       />
@@ -194,7 +196,7 @@ export default function Login() {
                   <div>
                     <h3 className="text-base font-medium">Reset your password</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Enter your @ensia.edu.dz email and we’ll send a reset link.
+                      Enter your @ensia.edu.dz email and we'll send a reset link.
                     </p>
                   </div>
                   {forgotSent ? (
@@ -257,7 +259,7 @@ export default function Login() {
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
-                        id="signup-password" type={showPassword ? "text" : "password"} placeholder="••••••••"
+                        id="signup-password" type={showPassword ? "text" : "password"} placeholder="········"
                         className="pl-10 pr-10"
                         value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} required
                       />
@@ -309,7 +311,8 @@ export default function Login() {
                   <div className="text-center mb-4">
                     <h3 className="text-lg font-medium text-foreground">Verify your email</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      We’ve sent a 6-digit verification code to <span className="text-primary">{signupEmail}</span>.
+                      We've sent a 6-digit verification code to{' '}
+                      <span className="text-primary">{signupEmail}</span>.
                     </p>
                   </div>
                   {otpError && <div className="text-sm font-medium text-destructive text-center">{otpError}</div>}
