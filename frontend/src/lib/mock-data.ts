@@ -733,4 +733,48 @@ export const api = {
       throw error;
     }
   },
+
+  // ---- bulk CSV import ----
+  async importStudents(
+    rows: { full_name: string; student_number: string; group_name: string }[],
+  ): Promise<{ ok: number; skipped: number; errors: string[] }> {
+    const allGroups = await fetchAll<Group>('groups', adaptGroup);
+    const groupByName = new Map(allGroups.map((g) => [g.group_name.toLowerCase().trim(), g.id]));
+    let ok = 0, skipped = 0;
+    const errors: string[] = [];
+    for (const row of rows) {
+      const gid = groupByName.get(row.group_name.toLowerCase().trim());
+      if (!gid) {
+        errors.push(`"${row.full_name}": group "${row.group_name}" not found`);
+        skipped++;
+        continue;
+      }
+      const { data: stu, error: e1 } = await supabase
+        .from('students')
+        .upsert(
+          { student_number: row.student_number.trim(), full_name: row.full_name.trim() },
+          { onConflict: 'student_number' },
+        )
+        .select('id')
+        .single();
+      if (e1 || !stu) {
+        errors.push(`"${row.full_name}": ${e1?.message ?? 'insert failed'}`);
+        skipped++;
+        continue;
+      }
+      const { error: e2 } = await supabase
+        .from('student_groups')
+        .upsert(
+          { student_id: (stu as any).id, group_id: gid },
+          { onConflict: 'student_id,group_id', ignoreDuplicates: true },
+        );
+      if (e2) {
+        errors.push(`"${row.full_name}": group link — ${e2.message}`);
+        skipped++;
+        continue;
+      }
+      ok++;
+    }
+    return { ok, skipped, errors };
+  },
 };

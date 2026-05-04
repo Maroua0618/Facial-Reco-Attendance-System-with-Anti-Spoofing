@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Search, UserPlus, Pencil, Trash2 } from 'lucide-react';
+import { Search, UserPlus, Pencil, Trash2, Upload } from 'lucide-react';
 import { api } from '@/lib/mock-data';
 import { toast } from 'sonner';
 
@@ -24,11 +24,15 @@ interface Row {
 }
 
 interface EditState { id: string; full_name: string; student_number: string }
+interface ImportRow { full_name: string; student_number: string; group_name: string }
 
 export default function StudentsList() {
   const [q, setQ] = useState('');
   const [editStudent, setEditStudent] = useState<EditState | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importRows, setImportRows] = useState<ImportRow[]>([]);
+  const [fileKey, setFileKey] = useState(0);
   const qc = useQueryClient();
 
   const { data: groups = [] } = useQuery({ queryKey: ['groups'], queryFn: api.getGroups });
@@ -79,11 +83,56 @@ export default function StudentsList() {
     },
   });
 
+  const importMut = useMutation({
+    mutationFn: () => api.importStudents(validImportRows),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['students-flat'] });
+      qc.invalidateQueries({ queryKey: ['stats'] });
+      toast.success(
+        `Imported ${result.ok} student${result.ok !== 1 ? 's' : ''}${
+          result.skipped ? ` · ${result.skipped} skipped` : ''
+        }`,
+      );
+      result.errors.slice(0, 3).forEach((e) => toast.error(e));
+      setImportOpen(false);
+      setImportRows([]);
+      setFileKey((k) => k + 1);
+    },
+    onError: () => toast.error('Import failed'),
+  });
+
+  const handleFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = (e.target?.result as string) ?? '';
+      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      const start = lines[0]?.toLowerCase().includes('full_name') ? 1 : 0;
+      const parsed: ImportRow[] = lines.slice(start).map((line) => {
+        const [full_name = '', student_number = '', group_name = ''] = line
+          .split(',')
+          .map((p) => p.trim());
+        return { full_name, student_number, group_name };
+      });
+      setImportRows(parsed);
+    };
+    reader.readAsText(file);
+  };
+
+  const validImportRows = importRows.filter(
+    (r) => r.full_name && r.student_number && r.group_name,
+  );
+
   const filtered = rows.filter(
     (s) =>
       s.full_name.toLowerCase().includes(q.toLowerCase()) ||
       (s.matricule ?? '').toLowerCase().includes(q.toLowerCase()),
   );
+
+  const closeImport = () => {
+    setImportOpen(false);
+    setImportRows([]);
+    setFileKey((k) => k + 1);
+  };
 
   return (
     <DashboardLayout>
@@ -93,11 +142,16 @@ export default function StudentsList() {
             <h1 className="text-2xl font-bold">Students</h1>
             <p className="text-sm text-muted-foreground">{filtered.length} students</p>
           </div>
-          <Button asChild>
-            <Link to="/students/register">
-              <UserPlus className="w-4 h-4 mr-1" /> Register
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import CSV
+            </Button>
+            <Button asChild>
+              <Link to="/students/register">
+                <UserPlus className="w-4 h-4 mr-1" /> Register
+              </Link>
+            </Button>
+          </div>
         </div>
         <Card>
           <CardHeader>
@@ -114,7 +168,9 @@ export default function StudentsList() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoading && <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>}
+            {isLoading && (
+              <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>
+            )}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -144,7 +200,13 @@ export default function StudentsList() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => setEditStudent({ id: s.id, full_name: s.full_name, student_number: s.matricule })}
+                          onClick={() =>
+                            setEditStudent({
+                              id: s.id,
+                              full_name: s.full_name,
+                              student_number: s.matricule,
+                            })
+                          }
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
@@ -167,7 +229,12 @@ export default function StudentsList() {
       </div>
 
       {/* Edit dialog */}
-      <Dialog open={!!editStudent} onOpenChange={(open) => { if (!open) setEditStudent(null); }}>
+      <Dialog
+        open={!!editStudent}
+        onOpenChange={(open) => {
+          if (!open) setEditStudent(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Student</DialogTitle>
@@ -179,7 +246,9 @@ export default function StudentsList() {
                 <Input
                   id="edit-name"
                   value={editStudent.full_name}
-                  onChange={(e) => setEditStudent({ ...editStudent, full_name: e.target.value })}
+                  onChange={(e) =>
+                    setEditStudent({ ...editStudent, full_name: e.target.value })
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -187,13 +256,17 @@ export default function StudentsList() {
                 <Input
                   id="edit-matricule"
                   value={editStudent.student_number}
-                  onChange={(e) => setEditStudent({ ...editStudent, student_number: e.target.value })}
+                  onChange={(e) =>
+                    setEditStudent({ ...editStudent, student_number: e.target.value })
+                  }
                 />
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditStudent(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setEditStudent(null)}>
+              Cancel
+            </Button>
             <Button onClick={() => editMut.mutate()} disabled={editMut.isPending}>
               {editMut.isPending ? 'Saving...' : 'Save'}
             </Button>
@@ -202,23 +275,124 @@ export default function StudentsList() {
       </Dialog>
 
       {/* Delete confirm dialog */}
-      <Dialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
+      <Dialog
+        open={!!deleteId}
+        onOpenChange={(open) => {
+          if (!open) setDeleteId(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Student</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
             This will permanently delete the student and all their group memberships.
-            Attendance records linked to this student will block deletion — you must remove them first.
+            Attendance records linked to this student will block deletion — you must remove
+            them first.
           </p>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setDeleteId(null)}>
+              Cancel
+            </Button>
             <Button
               variant="destructive"
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               disabled={deleteMut.isPending}
             >
               {deleteMut.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import CSV dialog */}
+      <Dialog open={importOpen} onOpenChange={(open) => { if (!open) closeImport(); }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Import Students from CSV</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Format:{' '}
+              <code className="font-mono bg-muted px-1 rounded text-xs">
+                full_name,student_number,group_name
+              </code>{' '}
+              — one student per line.
+            </p>
+            <a
+              href="data:text/csv;charset=utf-8,full_name%2Cstudent_number%2Cgroup_name%0AAya%20Benali%2CS2026001%2CL3%20CS%0A"
+              download="students_template.csv"
+              className="text-xs text-primary hover:underline"
+            >
+              Download template
+            </a>
+            <Input
+              key={fileKey}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => {
+                if (e.target.files?.[0]) handleFile(e.target.files[0]);
+              }}
+            />
+            {importRows.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {validImportRows.length} valid
+                  {importRows.length - validImportRows.length > 0 &&
+                    ` · ${importRows.length - validImportRows.length} incomplete (missing fields)`}
+                </p>
+                <div className="max-h-48 overflow-y-auto rounded border text-xs">
+                  <table className="w-full">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="px-2 py-1 text-left font-medium">Name</th>
+                        <th className="px-2 py-1 text-left font-medium">Matricule</th>
+                        <th className="px-2 py-1 text-left font-medium">Group</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importRows.slice(0, 30).map((r, i) => {
+                        const invalid =
+                          !r.full_name || !r.student_number || !r.group_name;
+                        return (
+                          <tr
+                            key={i}
+                            className={
+                              invalid ? 'text-destructive bg-destructive/5' : ''
+                            }
+                          >
+                            <td className="px-2 py-1">{r.full_name || '—'}</td>
+                            <td className="px-2 py-1 font-mono">
+                              {r.student_number || '—'}
+                            </td>
+                            <td className="px-2 py-1">{r.group_name || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {importRows.length > 30 && (
+                  <p className="text-xs text-muted-foreground">
+                    …and {importRows.length - 30} more rows
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={closeImport}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => importMut.mutate()}
+              disabled={validImportRows.length === 0 || importMut.isPending}
+            >
+              {importMut.isPending
+                ? 'Importing…'
+                : `Import ${validImportRows.length} student${
+                    validImportRows.length !== 1 ? 's' : ''
+                  }`}
             </Button>
           </DialogFooter>
         </DialogContent>
