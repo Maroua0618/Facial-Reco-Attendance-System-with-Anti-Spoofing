@@ -157,12 +157,12 @@ def is_live(img, session_id: Optional[str] = None) -> Tuple[bool, float, Dict[st
 
     if _session is not None:
         import cv2
-        # MiniFASNetV2 expects an 80x80 face crop, normalised to [-1, 1].
-        # We crop the largest detected face first; fall back to full frame.
+        # MiniFASNetV2 was trained on RGB images (PyTorch/PIL pipeline).
+        # OpenCV delivers BGR, so convert before feeding the model.
         crop = _get_face_crop(img)
-        x = cv2.resize(crop, (80, 80)).astype(np.float32)
-        x = (x / 255.0 - 0.5) / 0.5          # [0,255] -> [-1, 1]
-        x = np.transpose(x, (2, 0, 1))[None]  # (1, 3, 80, 80)
+        rgb = cv2.cvtColor(cv2.resize(crop, (80, 80)), cv2.COLOR_BGR2RGB).astype(np.float32)
+        x = (rgb / 255.0 - 0.5) / 0.5          # [0,255] -> [-1, 1]
+        x = np.transpose(x, (2, 0, 1))[None]    # (1, 3, 80, 80) in RGB order
         out = _session.run(None, {_session.get_inputs()[0].name: x})[0].flatten()
         # Output: softmax([background, live, spoof])  — class 1 = live
         score = float(out[1] if out.size >= 2 else out[0])
