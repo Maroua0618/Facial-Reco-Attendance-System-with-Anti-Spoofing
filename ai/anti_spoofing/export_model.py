@@ -10,7 +10,7 @@ Run once from the project root:
     python ai/anti_spoofing/export_model.py
 
 Output: ai/anti_spoofing/model.onnx
-  Input  node: "input"  shape (batch, 3, 80, 80)  float32  range [-1, 1]
+  Input  node: "input"  shape (batch, 3, 80, 80)  float32  range [0, 255] BGR
   Output node: "output" shape (batch, 3)           softmax probabilities
     class 0 = background
     class 1 = live  (use this as the liveness score)
@@ -81,9 +81,13 @@ def _export():
 
     print(f"Loading weights from {weights_path} ...")
     model = MiniFASNetV2(conv6_kernel=(5, 5), num_classes=3, img_channel=3)
-    state = torch.load(weights_path, map_location="cpu")
-    model.load_state_dict(state)
+    raw = torch.load(weights_path, map_location="cpu")
+    # Weights were saved with torch.nn.DataParallel — strip "module." prefix
+    if any(k.startswith("module.") for k in raw.keys()):
+        raw = {k[len("module."):]: v for k, v in raw.items() if k.startswith("module.")}
+    model.load_state_dict(raw)
     model.eval()
+    model = model.float()
 
     class _Wrapped(torch.nn.Module):
         def __init__(self, base: torch.nn.Module) -> None:
@@ -93,10 +97,28 @@ def _export():
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return torch.softmax(self.base(x), dim=1)
 
-    wrapped = _Wrapped(model)
+    wrapped = _Wrapped(model).eval()
+
+    # Sanity-check: model expects [0, 255] BGR (the original to_tensor does NOT divide by 255)
+    import numpy as np
+    with torch.no_grad():
+        # Skin-tone in BGR (B~120, G~140, R~180 → BGR values typical for fair skin)
+        skin = wrapped(torch.full((1, 3, 80, 80), 140.0)).numpy().flatten()
+        # Bright screen-like patch (all 220 ≈ overexposed display)
+        bright = wrapped(torch.full((1, 3, 80, 80), 220.0)).numpy().flatten()
+        # Dark patch
+        dark = wrapped(torch.full((1, 3, 80, 80), 20.0)).numpy().flatten()
+    print("\n  Sanity check [0,255] BGR (class 0=bg, 1=live, 2=spoof):")
+    print(f"    skin   : {np.round(skin, 3)}  -> {'LIVE' if np.argmax(skin)==1 else 'SPOOF/BG'}")
+    print(f"    bright : {np.round(bright, 3)}  -> {'LIVE' if np.argmax(bright)==1 else 'SPOOF/BG'}")
+    print(f"    dark   : {np.round(dark, 3)}  -> {'LIVE' if np.argmax(dark)==1 else 'SPOOF/BG'}")
+    if np.argmax(skin) == 1 and np.argmax(bright) != 1:
+        print("  OK: skin-tone LIVE, bright screen SPOOF — model discriminates correctly")
+    else:
+        print("  WARNING: unexpected classification — check model/weights")
 
     dummy = torch.zeros(1, 3, 80, 80)
-    print(f"Exporting ONNX to {OUT_PATH} ...")
+    print(f"\nExporting ONNX to {OUT_PATH} ...")
     torch.onnx.export(
         wrapped,
         dummy,
@@ -105,6 +127,7 @@ def _export():
         output_names=["output"],
         dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
         opset_version=11,
+        dynamo=False,
     )
     print(f"\n  model.onnx written ({os.path.getsize(OUT_PATH) // 1024} KB)")
     print("  class 1 = live score  |  class 2 = spoof score")
