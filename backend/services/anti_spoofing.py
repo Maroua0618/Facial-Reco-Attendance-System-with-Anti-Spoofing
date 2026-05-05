@@ -8,7 +8,11 @@ from config import MOCK_AI, SPOOF_THRESHOLD
 log = logging.getLogger("anti_spoofing")
 log.setLevel(logging.INFO)
 
-MODEL_PATH = os.getenv("SPOOF_MODEL_PATH", "ai/anti_spoofing/model.onnx")
+# Resolve path relative to this file so it works regardless of CWD.
+# backend/services/anti_spoofing.py -> ../../ai/anti_spoofing/model.onnx
+_REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_DEFAULT_MODEL = os.path.join(_REPO_ROOT, "ai", "anti_spoofing", "model.onnx")
+MODEL_PATH = os.getenv("SPOOF_MODEL_PATH", _DEFAULT_MODEL)
 
 _session = None
 _load_err: Optional[str] = None
@@ -80,19 +84,16 @@ def _heuristic_breakdown(img, session_id: Optional[str] = None) -> Dict[str, flo
     h, w = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 1) Sharpness window: real face ~80-300
     lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     if lap_var < 80 or lap_var > 300:
         sharpness = 0.2
     else:
         sharpness = 1.0
 
-    # 2) Saturation
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     sat = float(hsv[:, :, 1].mean()) / 255.0
     saturation_score = 1.0 if 0.12 <= sat <= 0.55 else 0.3
 
-    # 3) Edge density: tightened. Clean below 0.10.
     edges = cv2.Canny(gray, 100, 200)
     edge_ratio = float(edges.mean()) / 255.0
     if edge_ratio < 0.10:
@@ -100,12 +101,9 @@ def _heuristic_breakdown(img, session_id: Optional[str] = None) -> Dict[str, flo
     else:
         edge_score = max(0.0, 1.0 - (edge_ratio - 0.10) * 12.0)
 
-    # 4) Reflection / hot spots
     bright_ratio = float((gray > 240).mean())
     reflection_score = 1.0 - min(1.0, bright_ratio * 12.0)
 
-    # 5) Motion (per session). First-frame default lowered to 0.5 so a
-    # cold start can't trivially pass.
     motion_score = 0.5
     if session_id:
         small = cv2.resize(gray, (64, 64))
@@ -164,7 +162,7 @@ def is_live(img, session_id: Optional[str] = None) -> Tuple[bool, float, Dict[st
         x = (rgb / 255.0 - 0.5) / 0.5          # [0,255] -> [-1, 1]
         x = np.transpose(x, (2, 0, 1))[None]    # (1, 3, 80, 80) in RGB order
         out = _session.run(None, {_session.get_inputs()[0].name: x})[0].flatten()
-        # Output: softmax([background, live, spoof])  — class 1 = live
+        # softmax([background, live, spoof]) — class 1 = live
         score = float(out[1] if out.size >= 2 else out[0])
         return score >= SPOOF_THRESHOLD, score, {"onnx": score}
 
