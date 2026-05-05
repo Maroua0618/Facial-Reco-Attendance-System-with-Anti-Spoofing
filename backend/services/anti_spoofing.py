@@ -17,6 +17,9 @@ _tried_load = False
 _prev_frames: Dict[str, Tuple[float, np.ndarray]] = {}
 _PREV_FRAME_TTL = 30.0
 
+# Haar cascade for face crop (loaded once, used in ONNX path)
+_face_cascade = None
+
 
 def _ensure_loaded():
     global _session, _load_err, _tried_load
@@ -45,6 +48,31 @@ def anti_spoofing_status():
         "error": _load_err,
         "threshold": SPOOF_THRESHOLD,
     }
+
+
+def _get_face_crop(img):
+    """Return the largest detected face crop with 20 % padding, or the full
+    frame if no face is found (Haar cascade, no extra model needed)."""
+    global _face_cascade
+    import cv2
+
+    if _face_cascade is None:
+        xml = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        _face_cascade = cv2.CascadeClassifier(xml)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    faces = _face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+    if not len(faces):
+        return img
+
+    x, y, w, h = max(faces.tolist(), key=lambda r: r[2] * r[3])
+    pad = int(max(w, h) * 0.20)
+    ih, iw = img.shape[:2]
+    x1 = max(0, x - pad)
+    y1 = max(0, y - pad)
+    x2 = min(iw, x + w + pad)
+    y2 = min(ih, y + h + pad)
+    return img[y1:y2, x1:x2]
 
 
 def _heuristic_breakdown(img, session_id: Optional[str] = None) -> Dict[str, float]:
@@ -124,14 +152,22 @@ def is_live(img, session_id: Optional[str] = None) -> Tuple[bool, float, Dict[st
         rng = np.random.default_rng(seed)
         s = float(rng.uniform(0.85, 0.99))
         return True, s, {"mock": s}
+
     _ensure_loaded()
+
     if _session is not None:
         import cv2
-        x = cv2.resize(img, (128, 128)).astype(np.float32) / 255.0
-        x = np.transpose(x, (2, 0, 1))[None]
+        # MiniFASNetV2 expects an 80x80 face crop, normalised to [-1, 1].
+        # We crop the largest detected face first; fall back to full frame.
+        crop = _get_face_crop(img)
+        x = cv2.resize(crop, (80, 80)).astype(np.float32)
+        x = (x / 255.0 - 0.5) / 0.5          # [0,255] -> [-1, 1]
+        x = np.transpose(x, (2, 0, 1))[None]  # (1, 3, 80, 80)
         out = _session.run(None, {_session.get_inputs()[0].name: x})[0].flatten()
+        # Output: softmax([background, live, spoof])  — class 1 = live
         score = float(out[1] if out.size >= 2 else out[0])
         return score >= SPOOF_THRESHOLD, score, {"onnx": score}
+
     b = _heuristic_breakdown(img, session_id=session_id)
     score = _aggregate(b)
     return score >= SPOOF_THRESHOLD, score, b
