@@ -32,28 +32,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { backendHealth } from "@/lib/api";
 
-const navItems = [
-  { title: "Dashboard",        url: "/dashboard",          icon: LayoutDashboard },
-  { title: "Add Module",       url: "/modules/add",        icon: BookOpen },
-  { title: "Register Student", url: "/students/register",  icon: UserPlus },
-  { title: "Attendance",       url: "/attendance",         icon: Camera },
-  { title: "History",          url: "/history",            icon: History },
-  { title: "Students",         url: "/students",           icon: Users },
-];
-
-const securityItems = [
-  { title: "Security",      url: "/security",            icon: ShieldAlert },
-  { title: "Spoof log",     url: "/security/spoof-log",  icon: ShieldAlert },
-  { title: "Activity log",  url: "/admin/activity",      icon: Activity },
-];
-
 const ROLE_STYLE: Record<string, string> = {
   admin:    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   lecturer: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   teacher:  "bg-muted text-muted-foreground",
 };
 
-function AppSidebarContent() {
+function AppSidebarContent({ role }: { role?: string | null }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
@@ -65,6 +50,24 @@ function AppSidebarContent() {
     await signOut();
     navigate("/", { replace: true });
   };
+
+  const isAdmin    = role === "admin";
+  const isLecturer = role === "lecturer";
+
+  const navItems = [
+    { title: "Dashboard",        url: "/dashboard",         icon: LayoutDashboard, show: true },
+    { title: "Add Module",       url: "/modules/add",       icon: BookOpen,        show: isAdmin || isLecturer },
+    { title: "Register Student", url: "/students/register", icon: UserPlus,        show: true },
+    { title: "Attendance",       url: "/attendance",        icon: Camera,          show: true },
+    { title: "History",          url: "/history",           icon: History,         show: true },
+    { title: "Students",         url: "/students",          icon: Users,           show: true },
+  ].filter((i) => i.show);
+
+  const securityItems = [
+    { title: "Security",      url: "/security",           icon: ShieldAlert, show: true },
+    { title: "Spoof log",     url: "/security/spoof-log", icon: ShieldAlert, show: true },
+    { title: "Activity log",  url: "/admin/activity",     icon: Activity,    show: isAdmin },
+  ].filter((i) => i.show);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
@@ -133,7 +136,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     typeof rawFullName === "string" && rawFullName.trim() !== "" ? rawFullName : "Teacher";
   const initial = fullName.charAt(0).toUpperCase();
 
-  // Fetch the teacher's role from the DB
   const { data: teacher } = useQuery({
     queryKey: ["current-teacher-role", user?.id],
     queryFn: async () => {
@@ -149,7 +151,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   });
 
-  // Ping /healthz every 30 s
   const { data: health, isError: healthError, status: healthStatus } = useQuery({
     queryKey: ["healthz-badge"],
     queryFn: backendHealth,
@@ -178,13 +179,12 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
-        <AppSidebarContent />
+        <AppSidebarContent role={role} />
         <div className="flex-1 flex flex-col">
           <header className="h-14 flex items-center border-b border-border px-4 gap-4">
             <SidebarTrigger />
             <div className="flex-1" />
             <div className="flex items-center gap-3">
-              {/* Healthz badge */}
               <div
                 className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-default"
                 title={healthTitle}
@@ -192,8 +192,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                 <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
                 <span className="hidden md:inline">AI</span>
               </div>
-
-              {/* Role badge */}
               {roleLabel && (
                 <span
                   className={`hidden md:inline-block text-xs px-2 py-0.5 rounded-full font-medium ${roleClass}`}
@@ -201,8 +199,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                   {roleLabel}
                 </span>
               )}
-
-              {/* User avatar + name */}
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
                   {initial}

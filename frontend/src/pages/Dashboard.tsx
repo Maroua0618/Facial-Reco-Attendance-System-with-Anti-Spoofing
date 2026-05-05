@@ -20,6 +20,7 @@ import { SystemHealthCard } from '@/components/dashboard/SystemHealthCard';
 import { api, type DashboardFilters as Filters } from '@/lib/mock-data';
 import { downloadCSV, toCSV } from '@/lib/csv';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Dashboard() {
   const [filters, setFilters] = useState<Filters>({});
@@ -28,6 +29,23 @@ export default function Dashboard() {
   const rawFullName = user?.user_metadata?.full_name;
   const fullName =
     typeof rawFullName === 'string' && rawFullName.trim() !== '' ? rawFullName : 'Teacher';
+
+  const { data: teacher } = useQuery({
+    queryKey: ['current-teacher-role', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data } = await supabase
+        .from('teachers')
+        .select('role')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+      return data as { role: string } | null;
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
+  const canAddModule = teacher?.role === 'admin' || teacher?.role === 'lecturer';
 
   const { data: modules = [], isPending: modulesLoading } =
     useQuery({ queryKey: ['modules'], queryFn: api.getModules });
@@ -95,7 +113,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stats cards with skeleton while loading */}
         {statsLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -106,7 +123,6 @@ export default function Dashboard() {
           <StatsCards stats={stats} />
         ) : null}
 
-        {/* Empty state — no modules yet */}
         {isEmpty && (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-16 gap-4 text-center">
@@ -116,17 +132,20 @@ export default function Dashboard() {
               <div>
                 <p className="font-semibold text-lg">No modules yet</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Create your first module to start tracking attendance.
+                  {canAddModule
+                    ? 'Create your first module to start tracking attendance.'
+                    : 'No modules have been created yet. Contact your lecturer or admin.'}
                 </p>
               </div>
-              <Button onClick={() => navigate('/modules/add')}>
-                Add your first module
-              </Button>
+              {canAddModule && (
+                <Button onClick={() => navigate('/modules/add')}>
+                  Add your first module
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {/* Rest of dashboard — only show when there's data */}
         {!isEmpty && (
           <>
             <div className="grid lg:grid-cols-3 gap-4">
