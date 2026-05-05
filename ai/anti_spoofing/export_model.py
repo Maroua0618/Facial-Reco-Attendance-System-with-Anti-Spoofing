@@ -9,10 +9,6 @@ Run once from the project root:
     cd D:/CNS_C1
     python ai/anti_spoofing/export_model.py
 
-The script clones github.com/minivision-ai/Silent-Face-Anti-Spoofing into
-ai/anti_spoofing/vendor/sfa (depth=1) and uses the pre-trained
-2.7_80x80_MiniFASNetV2.pth weights that ship in that repo.
-
 Output: ai/anti_spoofing/model.onnx
   Input  node: "input"  shape (batch, 3, 80, 80)  float32  range [-1, 1]
   Output node: "output" shape (batch, 3)           softmax probabilities
@@ -23,6 +19,7 @@ Output: ai/anti_spoofing/model.onnx
 
 import os
 import sys
+import stat
 import shutil
 import subprocess
 
@@ -33,13 +30,27 @@ REPO_URL = "https://github.com/minivision-ai/Silent-Face-Anti-Spoofing.git"
 _MARKER = os.path.join(VENDOR_DIR, "src", "model_lib", "MiniFASNet.py")
 
 
+def _force_rmtree(path):
+    """Remove a directory tree, clearing read-only bits first (needed for
+    .git/objects on Windows)."""
+    def _on_error(func, fpath, exc_info):
+        os.chmod(fpath, stat.S_IWRITE)
+        func(fpath)
+
+    # Python 3.12 renamed onerror -> onexc; support both.
+    try:
+        shutil.rmtree(path, onexc=_on_error)
+    except TypeError:
+        shutil.rmtree(path, onerror=_on_error)
+
+
 def _clone():
     if os.path.isfile(_MARKER):
         print("Vendor repo already present and complete, skipping clone.")
         return
     if os.path.isdir(VENDOR_DIR):
         print("Vendor dir exists but is incomplete — removing and re-cloning...")
-        shutil.rmtree(VENDOR_DIR)
+        _force_rmtree(VENDOR_DIR)
     os.makedirs(os.path.dirname(VENDOR_DIR), exist_ok=True)
     print("Cloning Silent-Face-Anti-Spoofing (depth=1) ...")
     subprocess.run(
@@ -93,7 +104,7 @@ def _export():
     )
     print(f"\n  model.onnx written ({os.path.getsize(OUT_PATH) // 1024} KB)")
     print("  class 1 = live score  |  class 2 = spoof score")
-    print("\nDone. Uvicorn will pick it up automatically on next start.")
+    print("\nDone. Restart uvicorn and watch for: Loaded liveness ONNX model")
 
 
 if __name__ == "__main__":
