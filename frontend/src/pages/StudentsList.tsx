@@ -171,59 +171,61 @@ export default function StudentsList() {
             {isLoading && (
               <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>
             )}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Matricule</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Group</TableHead>
-                  <TableHead>Rate</TableHead>
-                  <TableHead className="w-[140px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-mono text-xs">{s.matricule}</TableCell>
-                    <TableCell>{s.full_name}</TableCell>
-                    <TableCell>
-                      <Link to={`/groups/${s.group_id}`} className="text-primary hover:underline">
-                        {s.group_name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{(s.attendance_rate * 100).toFixed(1)}%</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button size="sm" variant="ghost" asChild>
-                          <Link to={`/students/${s.id}`}>View</Link>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            setEditStudent({
-                              id: s.id,
-                              full_name: s.full_name,
-                              student_number: s.matricule,
-                            })
-                          }
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(s.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Matricule</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="hidden sm:table-cell">Group</TableHead>
+                    <TableHead className="hidden sm:table-cell">Rate</TableHead>
+                    <TableHead className="w-[140px]"></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-mono text-xs">{s.matricule}</TableCell>
+                      <TableCell>{s.full_name}</TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <Link to={`/groups/${s.group_id}`} className="text-primary hover:underline">
+                          {s.group_name}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">{(s.attendance_rate * 100).toFixed(1)}%</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="ghost" asChild>
+                            <Link to={`/students/${s.id}`}>View</Link>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              setEditStudent({
+                                id: s.id,
+                                full_name: s.full_name,
+                                student_number: s.matricule,
+                              })
+                            }
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(s.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -370,6 +372,7 @@ export default function StudentsList() {
                         );
                       })}
                     </tbody>
+
                   </table>
                 </div>
                 {importRows.length > 30 && (

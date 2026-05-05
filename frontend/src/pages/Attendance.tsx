@@ -111,9 +111,9 @@ export default function Attendance() {
               Pick a session, then start the camera. Frames are sent to the backend at ~1 fps.
             </p>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             <Select value={sessionId} onValueChange={(v) => { setSessionId(v); setEvents([]); }}>
-              <SelectTrigger className="w-[320px]">
+              <SelectTrigger className="w-full sm:w-[320px]">
                 <SelectValue placeholder="Select session" />
               </SelectTrigger>
               <SelectContent>

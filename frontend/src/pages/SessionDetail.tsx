@@ -160,50 +160,52 @@ export default function SessionDetail() {
                 <p className="text-xs text-muted-foreground">Use the dropdown to manually override a student's status. Use Finalize to bulk-mark all unmarked students as absent.</p>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Matricule</TableHead>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Confidence</TableHead>
-                      <TableHead>Marked at</TableHead>
-                      <TableHead className="w-[150px]">Override</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.roster.map((r) => (
-                      <TableRow key={r.student.id}>
-                        <TableCell className="font-mono text-xs">{r.student.student_number}</TableCell>
-                        <TableCell>{r.student.full_name}</TableCell>
-                        <TableCell>{statusBadge(r.status)}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {r.confidence !== null ? `${(r.confidence * 100).toFixed(1)}%` : '—'}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground font-mono">
-                          {r.marked_at ?? '—'}
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={r.status === 'not_marked' ? '' : r.status}
-                            onValueChange={(v) =>
-                              overrideMut.mutate({ studentId: r.student.id, status: v as AttendanceStatus })
-                            }
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue placeholder="Set..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="present">Present</SelectItem>
-                              <SelectItem value="absent">Absent</SelectItem>
-                              <SelectItem value="spoof">Spoof</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Matricule</TableHead>
+                        <TableHead>Student</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="hidden md:table-cell text-right">Confidence</TableHead>
+                        <TableHead className="hidden md:table-cell">Marked at</TableHead>
+                        <TableHead className="w-[150px]">Override</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {data.roster.map((r) => (
+                        <TableRow key={r.student.id}>
+                          <TableCell className="font-mono text-xs">{r.student.student_number}</TableCell>
+                          <TableCell>{r.student.full_name}</TableCell>
+                          <TableCell>{statusBadge(r.status)}</TableCell>
+                          <TableCell className="hidden md:table-cell text-right tabular-nums">
+                            {r.confidence !== null ? `${(r.confidence * 100).toFixed(1)}%` : '—'}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground font-mono">
+                            {r.marked_at ?? '—'}
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={r.status === 'not_marked' ? '' : r.status}
+                              onValueChange={(v) =>
+                                overrideMut.mutate({ studentId: r.student.id, status: v as AttendanceStatus })
+                              }
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Set..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="present">Present</SelectItem>
+                                <SelectItem value="absent">Absent</SelectItem>
+                                <SelectItem value="spoof">Spoof</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </>
