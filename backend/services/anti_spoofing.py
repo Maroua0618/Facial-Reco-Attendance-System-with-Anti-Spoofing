@@ -8,8 +8,6 @@ from config import MOCK_AI, SPOOF_THRESHOLD
 log = logging.getLogger("anti_spoofing")
 log.setLevel(logging.INFO)
 
-# Resolve path relative to this file so it works regardless of CWD.
-# backend/services/anti_spoofing.py -> ../../ai/anti_spoofing/model.onnx
 _REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 _DEFAULT_MODEL = os.path.join(_REPO_ROOT, "ai", "anti_spoofing", "model.onnx")
 MODEL_PATH = os.getenv("SPOOF_MODEL_PATH", _DEFAULT_MODEL)
@@ -21,7 +19,6 @@ _tried_load = False
 _prev_frames: Dict[str, Tuple[float, np.ndarray]] = {}
 _PREV_FRAME_TTL = 30.0
 
-# Haar cascade for face crop (loaded once, used in ONNX path)
 _face_cascade = None
 
 
@@ -55,8 +52,6 @@ def anti_spoofing_status():
 
 
 def _get_face_crop(img):
-    """Return the largest detected face crop with 20 % padding, or the full
-    frame if no face is found (Haar cascade, no extra model needed)."""
     global _face_cascade
     import cv2
 
@@ -65,7 +60,8 @@ def _get_face_crop(img):
         _face_cascade = cv2.CascadeClassifier(xml)
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = _face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+    # minNeighbors=3 is more sensitive than 5 — avoids falling back to full frame
+    faces = _face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(60, 60))
     if not len(faces):
         return img
 
@@ -155,16 +151,24 @@ def is_live(img, session_id: Optional[str] = None) -> Tuple[bool, float, Dict[st
 
     if _session is not None:
         import cv2
-        # MiniFASNetV2 was trained on RGB images (PyTorch/PIL pipeline).
-        # OpenCV delivers BGR, so convert before feeding the model.
         crop = _get_face_crop(img)
         rgb = cv2.cvtColor(cv2.resize(crop, (80, 80)), cv2.COLOR_BGR2RGB).astype(np.float32)
-        x = (rgb / 255.0 - 0.5) / 0.5          # [0,255] -> [-1, 1]
-        x = np.transpose(x, (2, 0, 1))[None]    # (1, 3, 80, 80) in RGB order
+        x = (rgb / 255.0 - 0.5) / 0.5
+        x = np.transpose(x, (2, 0, 1))[None]
         out = _session.run(None, {_session.get_inputs()[0].name: x})[0].flatten()
-        # softmax([background, live, spoof]) — class 1 = live
-        score = float(out[1] if out.size >= 2 else out[0])
-        return score >= SPOOF_THRESHOLD, score, {"onnx": score}
+
+        # MiniFASNetV2 softmax output: [background, live, spoof]
+        # Decision matches Silent-Face-Anti-Spoofing test.py: argmax==1 -> live
+        predicted = int(np.argmax(out))
+        live_score = float(out[1])
+        is_live_pred = predicted == 1
+        log.debug("ONNX out: %s  argmax=%d  live=%s", [round(float(v), 3) for v in out], predicted, is_live_pred)
+        return is_live_pred, live_score, {
+            "onnx_bg": round(float(out[0]), 3),
+            "onnx_live": round(live_score, 3),
+            "onnx_spoof": round(float(out[2]), 3),
+            "predicted_class": predicted,
+        }
 
     b = _heuristic_breakdown(img, session_id=session_id)
     score = _aggregate(b)
