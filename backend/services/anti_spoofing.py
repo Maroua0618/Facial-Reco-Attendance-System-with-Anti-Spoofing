@@ -152,9 +152,11 @@ def is_live(img, session_id: Optional[str] = None) -> Tuple[bool, float, Dict[st
     if _session is not None:
         import cv2
         crop = _get_face_crop(img)
-        rgb = cv2.cvtColor(cv2.resize(crop, (80, 80)), cv2.COLOR_BGR2RGB).astype(np.float32)
-        x = (rgb / 255.0 - 0.5) / 0.5
-        x = np.transpose(x, (2, 0, 1))[None]
+        # MiniFASNetV2 preprocessing matches original to_tensor in Silent-Face-Anti-Spoofing:
+        # - Keep BGR channel order (model trained on OpenCV BGR images)
+        # - Values in [0, 255] float32 (the custom to_tensor does NOT divide by 255)
+        bgr = cv2.resize(crop, (80, 80)).astype(np.float32)
+        x = np.transpose(bgr, (2, 0, 1))[None]  # (1, 3, 80, 80)
         out = _session.run(None, {_session.get_inputs()[0].name: x})[0].flatten()
 
         # MiniFASNetV2 softmax output: [background, live, spoof]
