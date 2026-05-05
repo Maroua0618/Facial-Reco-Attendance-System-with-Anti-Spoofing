@@ -1,4 +1,4 @@
-"""
+r"""
 One-time export: downloads MiniFASNetV2 pretrained weights and exports
 ai/anti_spoofing/model.onnx for use by the backend.
 
@@ -6,11 +6,11 @@ Prerequisites:
     pip install torch onnx requests
 
 Run once from the project root:
-    cd D:\CNS_C1
+    cd D:/CNS_C1
     python ai/anti_spoofing/export_model.py
 
 The script clones github.com/minivision-ai/Silent-Face-Anti-Spoofing into
-ai/anti_spoofing/vendor/sfa (depth=1, ~5 MB) and uses the pre-trained
+ai/anti_spoofing/vendor/sfa (depth=1) and uses the pre-trained
 2.7_80x80_MiniFASNetV2.pth weights that ship in that repo.
 
 Output: ai/anti_spoofing/model.onnx
@@ -23,18 +23,23 @@ Output: ai/anti_spoofing/model.onnx
 
 import os
 import sys
+import shutil
 import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VENDOR_DIR = os.path.join(HERE, "vendor", "sfa")
 OUT_PATH = os.path.join(HERE, "model.onnx")
 REPO_URL = "https://github.com/minivision-ai/Silent-Face-Anti-Spoofing.git"
+_MARKER = os.path.join(VENDOR_DIR, "src", "model_lib", "MiniFASNet.py")
 
 
 def _clone():
-    if os.path.isdir(os.path.join(VENDOR_DIR, ".git")):
-        print("Vendor repo already present, skipping clone.")
+    if os.path.isfile(_MARKER):
+        print("Vendor repo already present and complete, skipping clone.")
         return
+    if os.path.isdir(VENDOR_DIR):
+        print("Vendor dir exists but is incomplete — removing and re-cloning...")
+        shutil.rmtree(VENDOR_DIR)
     os.makedirs(os.path.dirname(VENDOR_DIR), exist_ok=True)
     print("Cloning Silent-Face-Anti-Spoofing (depth=1) ...")
     subprocess.run(
@@ -56,7 +61,7 @@ def _export():
     if not os.path.exists(weights_path):
         raise FileNotFoundError(
             f"Weights not found at {weights_path}.\n"
-            "Did the clone succeed? Try re-running the script."
+            "Did the clone succeed? Try deleting vendor/sfa and re-running."
         )
 
     print(f"Loading weights from {weights_path} ...")
@@ -65,7 +70,6 @@ def _export():
     model.load_state_dict(state)
     model.eval()
 
-    # Wrap so the exported graph outputs softmax probabilities directly.
     class _Wrapped(torch.nn.Module):
         def __init__(self, base: torch.nn.Module) -> None:
             super().__init__()
@@ -89,8 +93,7 @@ def _export():
     )
     print(f"\n  model.onnx written ({os.path.getsize(OUT_PATH) // 1024} KB)")
     print("  class 1 = live score  |  class 2 = spoof score")
-    print("\nDone. Copy model.onnx to backend/ai/anti_spoofing/model.onnx")
-    print("or set SPOOF_MODEL_PATH env var to point to it before starting uvicorn.")
+    print("\nDone. Uvicorn will pick it up automatically on next start.")
 
 
 if __name__ == "__main__":
