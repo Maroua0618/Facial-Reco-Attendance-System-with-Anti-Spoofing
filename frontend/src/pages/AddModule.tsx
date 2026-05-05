@@ -10,27 +10,6 @@ import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
-async function resolveLecturerId(): Promise<string> {
-  const { data: u } = await supabase.auth.getUser();
-  if (u.user) {
-    const { data } = await supabase
-      .from('teachers')
-      .select('id')
-      .eq('auth_user_id', u.user.id)
-      .maybeSingle();
-    if (data?.id) return data.id;
-  }
-  // Fallback: first seeded admin or lecturer
-  const { data, error } = await supabase
-    .from('teachers')
-    .select('id, role')
-    .in('role', ['admin', 'lecturer'])
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) throw new Error('No teacher available to own this module');
-  return data.id;
-}
-
 export default function AddModule() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -41,15 +20,12 @@ export default function AddModule() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const lecturerId = await resolveLecturerId();
-
       const { data: mod, error: e1 } = await supabase
         .from('modules')
         .insert({
           name,
           module_code: code,
-          academic_year: '2025-2026',
-          lecturer_id: lecturerId,
+          academic_year: year.toString(),
         })
         .select()
         .single();
