@@ -311,7 +311,7 @@ export default function Login() {
                   <div className="text-center mb-4">
                     <h3 className="text-lg font-medium text-foreground">Verify your email</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      We've sent a 6-digit verification code to{' '}
+                      We've sent a verification code to{' '}
                       <span className="text-primary">{signupEmail}</span>.
                     </p>
                   </div>
@@ -319,14 +319,14 @@ export default function Login() {
                   <div className="space-y-2">
                     <Label htmlFor="otp" className="text-center block">Verification Code</Label>
                     <Input
-                      id="otp" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6} placeholder="XXXXXX"
+                      id="otp" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={8} placeholder="········"
                       value={otp} onChange={(e) => setOtp(e.target.value)}
                       className="text-center tracking-[0.5em] text-lg font-mono placeholder:tracking-normal"
                       required
                     />
                   </div>
                   <Button type="submit" className="w-full glow-sm bg-primary hover:bg-primary/90 text-primary-foreground"
-                    disabled={isVerifyingOtp || otp.length !== 6}>
+                    disabled={isVerifyingOtp || otp.length < 6}>
                     {isVerifyingOtp ? "Verifying..." : "Verify Code"}
                   </Button>
                   <div className="text-center mt-4 text-sm">
