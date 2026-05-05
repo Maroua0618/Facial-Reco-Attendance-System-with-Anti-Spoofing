@@ -336,6 +336,7 @@ export const api = {
         attendance_rate: att.length ? present / att.length : 0,
         session_count: fs.length,
         assigned_teacher_name: teacher?.full_name ?? null,
+        assigned_teacher_id: mg.assigned_teacher_id ?? null,
       };
     });
     const allFs = sessionsAll.filter((s) => s.module_id === moduleId);

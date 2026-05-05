@@ -25,7 +25,7 @@ export interface Module {
   id: string;
   module_name: string;
   module_code: string;
-  lecturer_id: string;
+  lecturer_id: string | null;
   created_at: string;
 }
 
@@ -130,6 +130,7 @@ export interface GroupWithRate extends Group {
   attendance_rate: number;
   session_count: number;
   assigned_teacher_name: string | null;
+  assigned_teacher_id: string | null;
 }
 
 export interface ModuleDetail {

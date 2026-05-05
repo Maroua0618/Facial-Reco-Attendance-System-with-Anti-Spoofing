@@ -11,6 +11,8 @@ import { ChevronLeft, BookOpen, Download, Trash2 } from 'lucide-react';
 import { api } from '@/lib/mock-data';
 import { downloadCSV, toCSV } from '@/lib/csv';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 function rateColor(r: number): 'default' | 'secondary' | 'destructive' {
   return r >= 0.85 ? 'default' : r >= 0.7 ? 'secondary' : 'destructive';
@@ -20,12 +22,34 @@ export default function ModuleDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['moduleDetail', id],
     queryFn: () => api.getModuleDetail(id),
   });
+
+  const { data: myTeacher } = useQuery({
+    queryKey: ['myTeacher', user?.id],
+    queryFn: async () => {
+      const { data: t } = await supabase
+        .from('teachers')
+        .select('role')
+        .eq('id', user!.id)
+        .single();
+      return t as { role: string } | null;
+    },
+    enabled: !!user?.id,
+  });
+
+  const isAdmin = myTeacher?.role === 'admin';
+  const isLecturerOfModule = data?.module.lecturer_id === user?.id;
+  const visibleGroups = data
+    ? isAdmin || isLecturerOfModule
+      ? data.groups
+      : data.groups.filter((g) => g.assigned_teacher_id === user?.id)
+    : [];
 
   const deleteMut = useMutation({
     mutationFn: () => api.deleteModule(id),
@@ -43,7 +67,7 @@ export default function ModuleDetail() {
 
   const exportGroups = () => {
     if (!data) return;
-    const rows = data.groups.map((g) => ({
+    const rows = visibleGroups.map((g) => ({
       group: g.group_name, year: g.year,
       teacher: g.assigned_teacher_name ?? '',
       sessions: g.session_count,
@@ -98,7 +122,7 @@ export default function ModuleDetail() {
 
             <div className="grid md:grid-cols-3 gap-4">
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Overall rate</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{(data.overall_rate * 100).toFixed(1)}%</div></CardContent></Card>
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Groups enrolled</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{data.groups.length}</div></CardContent></Card>
+              <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Groups visible</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{visibleGroups.length}</div></CardContent></Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total sessions</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{data.total_sessions}</div></CardContent></Card>
             </div>
 
@@ -114,7 +138,7 @@ export default function ModuleDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.groups.map((g) => (
+                    {visibleGroups.map((g) => (
                       <TableRow key={g.id} className="hover:bg-muted/40">
                         <TableCell>
                           <Link to={`/groups/${g.id}`} className="hover:underline font-medium">

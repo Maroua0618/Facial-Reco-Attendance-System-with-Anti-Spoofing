@@ -298,8 +298,8 @@ export default function Login() {
                       </label>
                     </RadioGroup>
                     <p className="text-[11px] text-muted-foreground">
-                      Lecturers own modules; teachers are assigned to TD/TP groups.
-                      First-ever signup is automatically promoted to admin.
+                      <strong>Lecturer</strong> — delivers the course (Cours) and may also run TD/TP sessions; sees all groups in their modules.<br />
+                      <strong>Teacher</strong> — assigned to specific TD/TP groups only; sees only their assigned groups.
                     </p>
                   </div>
                   <Button type="submit" className="w-full glow-sm" disabled={isSigningUp}>
