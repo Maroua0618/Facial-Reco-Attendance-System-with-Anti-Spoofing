@@ -1,215 +1,188 @@
-# 📂 Secure Face Recognition Attendance System - File Structure
+# FaceGuard — AI-Powered Attendance System
 
-## 🎨 FRONTEND (React)
-
-### `App.jsx`
-**Purpose:** Main application router  
-**Responsibilities:**
-- Controls navigation between core pages (Home, Register, Attendance)
-- Defines route structure using React Router
-- Sets up main application wrapper and global state providers
-
-### `pages/Home.jsx`
-**Purpose:** Landing page with main menu  
-**Responsibilities:**
-- Displays welcome interface with two action buttons
-- Handles navigation to Register and Attendance pages
-- Shows system status and quick statistics
-
-### `pages/Register.jsx`
-**Purpose:** Student registration interface  
-**Responsibilities:**
-- Collects student information (name, group)
-- Integrates camera feed for face capture
-- Sends registration data to backend API
-- Provides visual feedback during registration process
-
-### `pages/Attendance.jsx`
-**Purpose:** Attendance tracking interface  
-**Responsibilities:**
-- Renders dropdowns for week (1-14) and group selection
-- Manages attendance session lifecycle (start/stop)
-- Displays real-time recognition results
-- Shows live feedback for each detected face
-
-### `components/CameraFeed.jsx`
-**Purpose:** Webcam handling component  
-**Responsibilities:**
-- Accesses user webcam via MediaDevices API
-- Manages video stream lifecycle
-- Captures and sends frames to backend at configurable intervals
-- Handles camera errors and permissions
-
-### `components/StudentForm.jsx`
-**Purpose:** Reusable form component  
-**Responsibilities:**
-- Manages input fields for name and group
-- Implements client-side validation
-- Handles form state and submission
-- Provides error messages and success feedback
-
-### `services/api.js`
-**Purpose:** API communication layer  
-**Responsibilities:**
-- Centralizes all backend API calls
-- Manages request/response interceptors
-- Handles error handling and retry logic
-- Provides typed API methods for registration and attendance
+An AI-powered, face-recognition attendance system built for ENSIA. Teachers open a session, point a webcam at students, and the system recognises faces in real time, marks attendance automatically, and flags spoofing attempts — all stored in a cloud database with full audit trails.
 
 ---
 
-## ⚙️ BACKEND (Flask)
+## Tech Stack
 
-### `app.py`
-**Purpose:** Application entry point  
-**Responsibilities:**
-- Initializes Flask application
-- Configures CORS, middleware, and extensions
-- Registers all route blueprints
-- Starts the development/production server
-
-### `routes/register.py`
-**Purpose:** Registration endpoint handler  
-**Responsibilities:**
-- Processes POST requests to `/register`
-- Validates incoming registration data
-- Triggers face embedding generation
-- Orchestrates student data storage
-
-### `routes/attendance.py`
-**Purpose:** Attendance session management  
-**Responsibilities:**
-- Handles attendance session initialization
-- Processes individual frame submissions
-- Coordinates face detection, anti-spoofing, and recognition
-- Returns real-time attendance decisions
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui |
+| State / data | TanStack Query (react-query) + React Router v6 |
+| Charts | Recharts |
+| Auth & DB | Supabase (Postgres + pgvector + RLS + Auth) |
+| AI backend | Python FastAPI + InsightFace `buffalo_l` + OpenCV |
+| Liveness | ONNX slot (heuristic fallback: sharpness · saturation · motion) |
+| Tests | Vitest (frontend) + pytest (backend) + GitHub Actions CI |
 
 ---
 
-## 🧠 SERVICES (Business Logic)
+## Features
 
-### `services/face_service.py`
-**Purpose:** Face recognition orchestration  
-**Responsibilities:**
-- Manages face detection pipeline
-- Generates and compares face embeddings
-- Integrates with AI models for recognition
-- Handles caching for performance optimization
+### Auth & Roles
+- Sign-up restricted to `@ensia.edu.dz` emails — enforced at the DB trigger level
+- Email OTP verification required before any DB row is created
+- Three roles: **admin**, **lecturer**, **teacher** — chosen at sign-up, enforced by Row-Level Security on every table
+- First user automatically becomes admin
 
-### `services/anti_spoofing.py`
-**Purpose:** Liveness detection service  
-**Responsibilities:**
-- Loads and manages anti-spoofing model
-- Preprocesses frames for model input
-- Determines authenticity of detected faces
-- Logs spoofing attempts for security audit
+### Dashboard
+- 11 live widgets: attendance rate, active modules, sessions today, spoof alerts, weekly trend chart, per-module breakdown, attendance heatmap, student ranking, today's schedule, live session card, system health badge
+- Admins see all data; lecturers/teachers see only their own modules
 
----
+### Student Management
+- Register students with webcam — photo saved + 512-d face embedding stored in pgvector
+- Bulk CSV import with preview, validation, and error reporting
+- Student profile: photo/avatar, group badges, attendance stats, weekly trend chart, full session history
 
-## 🤖 AI MODULE (Machine Learning)
+### Modules & Groups
+- Create modules with academic year and assigned lecturer
+- Assign groups to modules with a specific teacher per group
 
-### `ai/face_model/embeddings.py`
-**Purpose:** Face embedding generation  
-**Responsibilities:**
-- Loads pretrained face recognition model
-- Converts face images to 128/512-dimension vectors
-- Normalizes embeddings for consistent comparison
-- Handles batch processing for efficiency
+### Live Attendance
+- Select a session → camera opens → faces recognised at ~1 fps
+- Each match shows full name + matricule + confidence % — clickable link to student profile
+- Anti-spoofing heuristic on every frame; spoof attempts logged separately
+- Manual override available in session detail with full audit trail
 
-### `ai/face_model/recognition.py`
-**Purpose:** Face matching logic  
-**Responsibilities:**
-- Implements similarity metrics (cosine, Euclidean)
-- Finds closest match in student database
-- Applies threshold-based decision making
-- Handles unknown face identification
-
-### `ai/anti_spoofing/predict.py`
-**Purpose:** Liveness prediction wrapper  
-**Responsibilities:**
-- Loads and initializes anti-spoofing model
-- Preprocesses frames for model inference
-- Runs prediction and returns confidence scores
-- Handles model warmup and optimization
-
-### `ai/anti_spoofing/model.h5`
-**Purpose:** Pretrained liveness detection model  
-**Model Architecture:**
-- CNN-based classifier trained on real/fake face datasets
-- Distinguishes between live faces, printed photos, and screen displays
-- Optimized for real-time inference on CPU/GPU
+### History & Reports
+- Attendance history with module/group filters — CSV export
+- Spoof log with CSV export
+- Audit log — every manual status change recorded with actor, timestamp, before/after
 
 ---
 
-## 🗄️ DATABASE LAYER
+## Project Structure
 
-### `database/db.py`
-**Purpose:** Database connection management  
-**Responsibilities:**
-- Creates and manages SQLite connections
-- Provides connection pooling for concurrent requests
-- Implements context managers for transaction handling
-- Handles connection cleanup and error recovery
-
-### `models/student.py`
-**Purpose:** Student data operations  
-**Responsibilities:**
-- Defines Student model schema
-- Implements CRUD operations for student records
-- Handles embedding serialization/deserialization
-- Provides query methods for filtering by group
-
-### `models/attendance.py`
-**Purpose:** Attendance record management  
-**Responsibilities:**
-- Defines Attendance model schema
-- Implements attendance marking logic
-- Provides aggregation queries for reporting
-- Handles bulk operations for performance
+```
+CNS_C1/
+├── frontend/          # React + TypeScript SPA
+│   └── src/
+│       ├── pages/     # One file per route
+│       ├── components/# DashboardLayout, CameraFeed, dashboard widgets
+│       ├── lib/       # mock-data.ts (Supabase queries), api.ts (FastAPI client), csv.ts
+│       ├── hooks/     # useAuth
+│       └── types/     # db.ts — all TypeScript types
+├── backend/           # FastAPI app
+│   ├── routes/        # health.py · embed.py · recognize.py
+│   └── services/      # face_service · anti_spoofing · db_service · auth
+├── ai/
+│   └── anti_spoofing/ # model.onnx goes here (see P7)
+└── supabase/          # SQL migrations
+```
 
 ---
 
-## 📊 DATA FILES
+## Database Schema
 
-### `data/embeddings.pkl`
-**Purpose:** Serialized embedding cache  
-**Format:** Python pickle dictionary  
-**Content:** 
-- Student ID to embedding vector mappings
-- Timestamps for cache invalidation
-- Metadata for version control
+```
+teachers           (id, full_name, email UNIQUE, role, auth_user_id, created_at)
+groups             (id, group_name, year, created_at)
+modules            (id, name, module_code, academic_year, lecturer_id, created_at)
+module_groups      (module_id, group_id, assigned_teacher_id)  PK(module_id, group_id)
+students           (id, student_number UNIQUE, full_name, photo_url, created_at)
+student_groups     (student_id, group_id)  PK(student_id, group_id)
+student_embeddings (id, student_id, embedding vector(512), captured_at)
+                   + HNSW index (vector_cosine_ops)
+sessions           (id, module_id, group_id, session_date, start_time, type, week, created_at)
+attendance         (id, session_id, student_id, status, confidence, marked_at, updated_at)
+audit_log          (id, at, actor_id, session_id, student_id, prev_status, new_status)
+```
 
-### `data/attendance_records.csv`
-**Purpose:** Attendance backup/export  
-**Format:** CSV with headers  
-**Fields:**
-- student_id, name, group, week, status, timestamp
-- Used for offline analysis and data migration
+RPC: `match_student_embedding(q vector(512), g uuid, k int)` — pgvector kNN restricted to a group.
+
+Row-Level Security is enabled on all 10 tables. Helper functions: `current_teacher_id()`, `current_user_role()`, `is_admin()`, `can_see_module(uuid)`.
 
 ---
 
-## ⚙️ CONFIGURATION
+## Data Flow
 
-### `config/config.py`
-**Purpose:** Central configuration management  
-**Configuration Sections:**
-```python
-# Database settings
-DB_PATH = "database.db"
-DB_BACKUP_INTERVAL = 3600
+```
+Browser ──→ Supabase Auth (JWT)
+Browser ──→ Supabase Postgres (anon key, RLS-gated)
+Browser ──→ FastAPI /embed /recognize (Bearer JWT)
+              └──→ InsightFace (embedding / recognition)
+              └──→ Supabase Postgres (service-role, bypasses RLS)
+```
 
-# Face recognition settings
-FACE_THRESHOLD = 0.6
-EMBEDDING_DIM = 128
+---
 
-# Anti-spoofing settings
-SPOOF_THRESHOLD = 0.5
-MODEL_PATH = "ai/anti_spoofing/model.h5"
+## Running Locally
 
-# Camera settings
-CAMERA_INDEX = 0
-FRAME_SKIP = 2  # Process every nth frame
+### Prerequisites
+- Node.js 18+
+- Python 3.10+
+- A Supabase project with the schema applied (see `supabase/` folder)
 
-# API settings
-API_HOST = "0.0.0.0"
-API_PORT = 5000
+### Frontend
+
+```bash
+cd frontend
+cp .env.example .env          # fill in your Supabase URL + publishable key
+npm install
+npm run dev                   # → http://localhost:5173
+```
+
+### Backend
+
+```bash
+cd backend
+cp .env.example .env          # fill in Supabase URL + service key
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # macOS/Linux
+pip install -r requirements.txt
+python scripts/warmup.py      # first run only — downloads InsightFace model (~280 MB)
+uvicorn app:app --reload      # → http://localhost:8000
+```
+
+### Environment variables
+
+**`frontend/.env`**
+```
+VITE_SUPABASE_URL=https://<ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+VITE_FASTAPI_URL=http://localhost:8000
+```
+
+**`backend/.env`**
+```
+SUPABASE_URL=https://<ref>.supabase.co
+SUPABASE_SERVICE_KEY=<service role key>
+DB_SCHEMA=public
+MOCK_AI=false
+FACE_THRESHOLD=0.5
+SPOOF_THRESHOLD=0.70
+ALLOWED_ORIGINS=http://localhost:5173
+```
+
+Set `MOCK_AI=true` to skip the InsightFace model entirely (returns a random 512-d unit vector) — useful for frontend-only development.
+
+---
+
+## Running Tests
+
+```bash
+# Frontend (Vitest)
+cd frontend && npm run test
+
+# Backend (pytest)
+cd backend && pytest tests/
+```
+
+CI runs both on every push via `.github/workflows/ci.yml`.
+
+---
+
+## Known Limitations
+
+- **Anti-spoofing is heuristic-only.** The ONNX slot at `ai/anti_spoofing/model.onnx` is ready but the model file is not included. A high-quality phone-screen replay can defeat the current heuristic. Real fix: train Silent-Face-Anti-Spoofing on CASIA-SURF/OULU-NPU and export to ONNX.
+- **No mobile responsive layout** — designed for desktop browsers.
+- **No i18n** — French/Arabic not implemented.
+- **No deployed instance** — runs locally only.
+
+---
+
+## Team
+
+ENSIA — CNS project, 2025–2026.
