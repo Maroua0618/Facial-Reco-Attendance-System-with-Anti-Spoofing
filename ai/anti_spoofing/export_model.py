@@ -31,13 +31,9 @@ _MARKER = os.path.join(VENDOR_DIR, "src", "model_lib", "MiniFASNet.py")
 
 
 def _force_rmtree(path):
-    """Remove a directory tree, clearing read-only bits first (needed for
-    .git/objects on Windows)."""
     def _on_error(func, fpath, exc_info):
         os.chmod(fpath, stat.S_IWRITE)
         func(fpath)
-
-    # Python 3.12 renamed onerror -> onexc; support both.
     try:
         shutil.rmtree(path, onexc=_on_error)
     except TypeError:
@@ -53,11 +49,19 @@ def _clone():
         _force_rmtree(VENDOR_DIR)
     os.makedirs(os.path.dirname(VENDOR_DIR), exist_ok=True)
     print("Cloning Silent-Face-Anti-Spoofing (depth=1) ...")
+    # The repo contains a file whose path has a trailing space — Windows
+    # cannot check it out and git exits with code 128. Everything we need
+    # (src/ + resources/) is extracted before that error, so we ignore the
+    # exit code and verify success by checking for the marker file instead.
     subprocess.run(
         ["git", "clone", "--depth=1", REPO_URL, VENDOR_DIR],
-        check=True,
     )
-    print("Clone done.")
+    if not os.path.isfile(_MARKER):
+        raise RuntimeError(
+            f"Clone incomplete — {_MARKER} not found.\n"
+            "Delete ai/anti_spoofing/vendor/ and try again."
+        )
+    print("Clone done (Windows path warning above is harmless).")
 
 
 def _export():
@@ -72,7 +76,7 @@ def _export():
     if not os.path.exists(weights_path):
         raise FileNotFoundError(
             f"Weights not found at {weights_path}.\n"
-            "Did the clone succeed? Try deleting vendor/sfa and re-running."
+            "Delete vendor/sfa and re-run to re-clone."
         )
 
     print(f"Loading weights from {weights_path} ...")
