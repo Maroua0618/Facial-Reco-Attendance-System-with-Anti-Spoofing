@@ -152,6 +152,10 @@ export const api = {
     return fetchAll('groups', adaptGroup);
   },
 
+  async getSessions(): Promise<Session[]> {
+    return fetchAll('sessions', adaptSession);
+  },
+
   async getStats(f: DashboardFilters = {}): Promise<DashboardStats> {
     const [sessionsAll, modulesAll, groupsAll, attendanceAll, studentsAll] = await Promise.all([
       fetchAll<Session>('sessions', adaptSession),

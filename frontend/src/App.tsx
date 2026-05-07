@@ -19,6 +19,8 @@ import RegisterStudent from "./pages/RegisterStudent";
 import Attendance from "./pages/Attendance";
 import AddModule from "./pages/AddModule";
 import StudentsList from "./pages/StudentsList";
+import TeachersList from "./pages/TeachersList";
+import ModulesList from "./pages/ModulesList";
 import StudentProfile from "./pages/StudentProfile";
 import AttendanceHistory from "./pages/AttendanceHistory";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -55,11 +57,13 @@ const App = () => (
               {/* Protected */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/modules" element={<ModulesList />} />
                 <Route path="/modules/add" element={<AddModule />} />
                 <Route path="/modules/:id" element={<ModuleDetail />} />
                 <Route path="/groups/:id" element={<GroupDetail />} />
                 <Route path="/sessions/:id" element={<SessionDetail />} />
                 <Route path="/students" element={<StudentsList />} />
+                <Route path="/teachers" element={<TeachersList />} />
                 <Route path="/students/register" element={<RegisterStudent />} />
                 <Route path="/students/:id" element={<StudentProfile />} />
                 <Route path="/attendance" element={<Attendance />} />

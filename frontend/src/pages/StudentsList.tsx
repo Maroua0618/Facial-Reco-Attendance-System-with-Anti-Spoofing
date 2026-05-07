@@ -21,6 +21,7 @@ interface Row {
   attendance_rate: number;
   group_id: string;
   group_name: string;
+  year: number;
 }
 
 interface EditState { id: string; full_name: string; student_number: string }
@@ -50,6 +51,7 @@ export default function StudentsList() {
               attendance_rate: sw.attendance_rate,
               group_id: d.group.id,
               group_name: d.group.group_name,
+              year: d.group.year,
             }))
           : [],
       );
@@ -177,6 +179,7 @@ export default function StudentsList() {
                   <TableRow>
                     <TableHead>Matricule</TableHead>
                     <TableHead>Name</TableHead>
+                    <TableHead className="hidden sm:table-cell">Year</TableHead>
                     <TableHead className="hidden sm:table-cell">Group</TableHead>
                     <TableHead className="hidden sm:table-cell">Rate</TableHead>
                     <TableHead className="w-[140px]"></TableHead>
@@ -187,6 +190,7 @@ export default function StudentsList() {
                     <TableRow key={s.id}>
                       <TableCell className="font-mono text-xs">{s.matricule}</TableCell>
                       <TableCell>{s.full_name}</TableCell>
+                      <TableCell className="hidden sm:table-cell">Y{s.year}</TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <Link to={`/groups/${s.group_id}`} className="text-primary hover:underline">
                           {s.group_name}

@@ -56,11 +56,13 @@ function AppSidebarContent({ role }: { role?: string | null }) {
 
   const navItems = [
     { title: "Dashboard",        url: "/dashboard",         icon: LayoutDashboard, show: true },
+    { title: "Curriculum",       url: "/modules",           icon: BookOpen,        show: true },
     { title: "Add Module",       url: "/modules/add",       icon: BookOpen,        show: isAdmin || isLecturer },
     { title: "Register Student", url: "/students/register", icon: UserPlus,        show: true },
     { title: "Attendance",       url: "/attendance",        icon: Camera,          show: true },
     { title: "History",          url: "/history",           icon: History,         show: true },
     { title: "Students",         url: "/students",          icon: Users,           show: true },
+    { title: "Teachers",         url: "/teachers",          icon: UserPlus,        show: isAdmin || isLecturer },
   ].filter((i) => i.show);
 
   const securityItems = [
