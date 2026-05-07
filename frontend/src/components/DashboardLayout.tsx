@@ -66,6 +66,7 @@ function AppSidebarContent({ role }: { role?: string | null }) {
   ].filter((i) => i.show);
 
   const securityItems = [
+    { title: "Assignments",   url: "/assignments",        icon: Activity,    show: isAdmin },
     { title: "Security",      url: "/security",           icon: ShieldAlert, show: true },
     { title: "Spoof log",     url: "/security/spoof-log", icon: ShieldAlert, show: true },
     { title: "Activity log",  url: "/admin/activity",     icon: Activity,    show: isAdmin },

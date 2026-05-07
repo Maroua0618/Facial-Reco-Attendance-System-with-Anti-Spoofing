@@ -818,4 +818,29 @@ export const api = {
     }
     return { ok, skipped, errors };
   },
+
+  async assignTeacherToGroup(groupId: string, moduleId: string, teacherId: string): Promise<void> {
+    const { error } = await supabase
+      .from('module_groups')
+      .update({ assigned_teacher_id: teacherId })
+      .eq('module_id', moduleId)
+      .eq('group_id', groupId);
+    if (error) throw error;
+  },
+
+  async updateModule(moduleId: string, patch: { lecturer_id?: string }): Promise<void> {
+    const { error } = await supabase
+      .from('modules')
+      .update(patch)
+      .eq('id', moduleId);
+    if (error) throw error;
+  },
+
+  async updateTeacherRole(teacherId: string, role: 'admin' | 'lecturer' | 'teacher'): Promise<void> {
+    const { error } = await supabase
+      .from('teachers')
+      .update({ role })
+      .eq('id', teacherId);
+    if (error) throw error;
+  },
 };
