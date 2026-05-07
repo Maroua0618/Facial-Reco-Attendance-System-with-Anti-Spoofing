@@ -28,6 +28,8 @@ export interface Module {
   module_name: string;
   module_code: string;
   lecturer_id: string | null;
+  academic_year?: string;
+  semester?: string;
   created_at: string;
 }
 

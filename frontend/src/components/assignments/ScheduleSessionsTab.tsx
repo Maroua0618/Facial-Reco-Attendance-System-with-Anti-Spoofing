@@ -42,7 +42,7 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
       const { data } = await supabase
         .from('teachers')
         .select('*')
-        .eq('id', user.id)
+        .eq('auth_user_id', user.id)
         .maybeSingle();
       return data;
     },

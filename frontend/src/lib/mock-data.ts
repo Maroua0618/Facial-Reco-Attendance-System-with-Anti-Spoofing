@@ -34,6 +34,8 @@ function adaptModule(r: any): Module {
     module_name: r.name ?? r.module_name ?? '',
     module_code: r.module_code ?? '',
     lecturer_id: r.lecturer_id,
+    academic_year: r.academic_year,
+    semester: r.semester,
     created_at: r.created_at ?? '',
   };
 }
