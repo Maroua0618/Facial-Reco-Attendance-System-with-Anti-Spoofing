@@ -836,11 +836,5 @@ export const api = {
     if (error) throw error;
   },
 
-  async updateTeacherRole(teacherId: string, role: 'admin' | 'lecturer' | 'teacher'): Promise<void> {
-    const { error } = await supabase
-      .from('teachers')
-      .update({ role })
-      .eq('id', teacherId);
-    if (error) throw error;
-  },
+
 };

@@ -12,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { api } from '@/lib/mock-data';
 import type { Teacher } from '@/types/db';
 
 interface ManageRolesTabProps {
@@ -33,10 +32,8 @@ export default function ManageRolesTab({ teachers }: ManageRolesTabProps) {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const updates = Object.entries(roleChanges).map(([teacherId, role]) =>
-        api.updateTeacherRole(teacherId, role),
-      );
-      await Promise.all(updates);
+      // Role management has been removed - teachers can serve as both lecturers and tutorial instructors
+      throw new Error('Role management is no longer supported');
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['teachers'] });
