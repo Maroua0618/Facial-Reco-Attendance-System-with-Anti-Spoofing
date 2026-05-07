@@ -28,6 +28,8 @@ export interface Module {
   module_name: string;
   module_code: string;
   lecturer_id: string | null;
+  academic_year?: string;
+  semester?: string;
   created_at: string;
 }
 
@@ -40,6 +42,9 @@ export interface Session {
   session_date: string;
   start_time: string;
   end_time?: string | undefined;
+  actual_started_at?: string | null;
+  actual_ended_at?: string | null;
+  duration_seconds?: number | null;
   session_type: SessionType;
   week: number;
   created_at: string;

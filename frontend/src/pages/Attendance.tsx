@@ -1,13 +1,13 @@
 import { useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { CameraFeed } from '@/components/CameraFeed';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { ShieldAlert, CheckCircle2, HelpCircle, Pause, Play } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, HelpCircle, Pause, Play, CheckSquare } from 'lucide-react';
 import { api } from '@/lib/mock-data';
 import { recognizeFace, type RecognizeResult } from '@/lib/api';
 import { toast } from 'sonner';
@@ -53,9 +53,14 @@ function LivenessDebug({ res }: { res: RecognizeResult | null }) {
 }
 
 export default function Attendance() {
+  const qc = useQueryClient();
   const [sessionId, setSessionId] = useState<string>('');
   const [running, setRunning] = useState(false);
   const [events, setEvents] = useState<LogEntry[]>([]);
+  const [seenStudents, setSeenStudents] = useState<Set<string>>(() => new Set());
+  const [finishedSessions, setFinishedSessions] = useState<Set<string>>(() => new Set());
+  const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null);
+  const hasStarted = Boolean(sessionStartedAt);
   const inflight = useRef(false);
 
   const { data: today = [] } = useQuery({ queryKey: ['today'], queryFn: api.getTodaySessions });
@@ -80,8 +85,63 @@ export default function Attendance() {
     return map;
   }, [sessionDetail]);
 
+  const notMarkedCount = sessionDetail?.roster.filter((r) => r.status === 'not_marked').length ?? 0;
+  const isFinished = sessionId ? finishedSessions.has(sessionId) : false;
+
+  const finalizeMut = useMutation({
+    mutationFn: () => api.finalizeSession(sessionId, {
+      startedAt: sessionStartedAt,
+      endedAt: new Date().toISOString(),
+    }),
+    onSuccess: (count) => {
+      setRunning(false);
+      setFinishedSessions((prev) => new Set(prev).add(sessionId));
+      qc.invalidateQueries({ queryKey: ['session-detail', sessionId] });
+      qc.invalidateQueries({ queryKey: ['sessionDetail', sessionId] });
+      qc.invalidateQueries({ queryKey: ['today'] });
+      qc.invalidateQueries({ queryKey: ['recent'] });
+      qc.invalidateQueries({ queryKey: ['stats'] });
+      qc.invalidateQueries({ queryKey: ['ranking'] });
+      qc.invalidateQueries({ queryKey: ['weekly'] });
+      qc.invalidateQueries({ queryKey: ['module-rate'] });
+      qc.invalidateQueries({ queryKey: ['heatmap'] });
+      qc.invalidateQueries({ queryKey: ['live'] });
+      toast.success(
+        count === 0
+          ? 'Session finalized. Everyone was already marked.'
+          : `Session finalized: ${count} student${count === 1 ? '' : 's'} marked absent.`,
+      );
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to finalize session');
+    },
+  });
+
+  const handleSessionChange = (value: string) => {
+    setSessionId(value);
+    setRunning(false);
+    setEvents([]);
+    setSeenStudents(new Set());
+    setSessionStartedAt(null);
+  };
+
+  const handleRunToggle = () => {
+    if (!sessionId) return;
+    setRunning((current) => {
+      if (!current && !sessionStartedAt) {
+        setSessionStartedAt(new Date().toISOString());
+      }
+      return !current;
+    });
+  };
+
+  const handleFinalize = () => {
+    if (!sessionId || finalizeMut.isPending) return;
+    finalizeMut.mutate();
+  };
+
   const handleFrame = async (canvas: HTMLCanvasElement) => {
-    if (!running || !session || inflight.current) return;
+    if (!running || !session || isFinished || inflight.current) return;
     inflight.current = true;
     try {
       const blob: Blob = await new Promise((resolve) =>
@@ -94,6 +154,11 @@ export default function Attendance() {
       setEvents((arr) => [{ ts: Date.now(), res }, ...arr].slice(0, 25));
       if (res.reason === 'spoof')
         toast.error(`Spoof blocked (live=${(res.live_conf * 100).toFixed(0)}%)`);
+      if (res.ok && res.student_id && !seenStudents.has(res.student_id)) {
+        setSeenStudents((prev) => new Set(prev).add(res.student_id!));
+        qc.invalidateQueries({ queryKey: ['session-detail', sessionId] });
+        qc.invalidateQueries({ queryKey: ['today'] });
+      }
     } catch {
       // network errors stay quiet
     } finally {
@@ -112,7 +177,7 @@ export default function Attendance() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <Select value={sessionId} onValueChange={(v) => { setSessionId(v); setEvents([]); }}>
+            <Select value={sessionId} onValueChange={handleSessionChange}>
               <SelectTrigger className="w-full sm:w-[320px]">
                 <SelectValue placeholder="Select session" />
               </SelectTrigger>
@@ -124,14 +189,28 @@ export default function Attendance() {
                 ))}
               </SelectContent>
             </Select>
+            {!isFinished && (
+              <Button
+                onClick={handleRunToggle}
+                disabled={!sessionId}
+                variant={running ? 'destructive' : 'default'}
+              >
+                {running
+                  ? <><Pause className="w-4 h-4 mr-1" /> Pause</>
+                  : <><Play className="w-4 h-4 mr-1" /> {hasStarted ? 'Resume' : 'Start'}</>}
+              </Button>
+            )}
             <Button
-              onClick={() => setRunning((r) => !r)}
-              disabled={!sessionId}
-              variant={running ? 'destructive' : 'default'}
+              onClick={handleFinalize}
+              disabled={!sessionId || isFinished || finalizeMut.isPending}
+              variant="outline"
             >
-              {running
-                ? <><Pause className="w-4 h-4 mr-1" /> Pause</>
-                : <><Play className="w-4 h-4 mr-1" /> Start</>}
+              <CheckSquare className="w-4 h-4 mr-1" />
+              {isFinished
+                ? 'Finished'
+                : finalizeMut.isPending
+                ? 'Finalizing...'
+                : `Finish${notMarkedCount > 0 ? ` (${notMarkedCount} absent)` : ''}`}
             </Button>
           </div>
         </div>

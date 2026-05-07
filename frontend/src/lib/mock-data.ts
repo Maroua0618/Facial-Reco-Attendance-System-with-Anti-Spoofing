@@ -34,6 +34,8 @@ function adaptModule(r: any): Module {
     module_name: r.name ?? r.module_name ?? '',
     module_code: r.module_code ?? '',
     lecturer_id: r.lecturer_id,
+    academic_year: r.academic_year,
+    semester: r.semester,
     created_at: r.created_at ?? '',
   };
 }
@@ -53,7 +55,7 @@ function adaptGroup(r: any): Group {
 function adaptTeacher(r: any): Teacher {
   return {
     id: r.id, full_name: r.full_name, email: r.email ?? '',
-    role: r.role ?? 'teacher', created_at: r.created_at ?? '',
+    role: r.role ?? 'teacher', auth_user_id: r.auth_user_id, created_at: r.created_at ?? '',
   };
 }
 function adaptSession(r: any): Session {
@@ -64,6 +66,9 @@ function adaptSession(r: any): Session {
     session_date: r.session_date,
     start_time: r.start_time?.slice(0, 5) ?? r.start_time,
     end_time: undefined,
+    actual_started_at: r.actual_started_at ?? null,
+    actual_ended_at: r.actual_ended_at ?? null,
+    duration_seconds: r.duration_seconds ?? null,
     session_type: r.session_type,
     week: r.week,
     created_at: r.created_at ?? '',
@@ -97,7 +102,7 @@ async function getCurrentTeacher(): Promise<Teacher | null> {
     if (rows) return adaptTeacher(rows);
   }
   const teachers = await fetchAll('teachers', adaptTeacher);
-  return teachers.find((t) => t.role === 'admin') ?? teachers[0] ?? null;
+  return teachers[0] ?? null;
 }
 
 function filterSessions(rows: Session[], f: { moduleId?: string; groupId?: string }): Session[] {
@@ -678,10 +683,37 @@ export const api = {
   },
 
   // ---- session finalization ----
-  async finalizeSession(sessionId: string): Promise<number> {
+  async finalizeSession(
+    sessionId: string,
+    timing?: { startedAt?: string | null; endedAt?: string },
+  ): Promise<number> {
     const { data: sRow } = await supabase
       .from('sessions').select('group_id').eq('id', sessionId).maybeSingle();
     if (!sRow) return 0;
+    const endedAt = timing?.endedAt ?? new Date().toISOString();
+    if (timing) {
+      const startedAt = timing.startedAt ?? endedAt;
+      const durationSeconds = Math.max(
+        0,
+        Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000),
+      );
+      const { error: sessionUpdateError } = await supabase
+        .from('sessions')
+        .update({
+          actual_started_at: startedAt,
+          actual_ended_at: endedAt,
+          duration_seconds: durationSeconds,
+        })
+        .eq('id', sessionId);
+      if (sessionUpdateError) {
+        console.error('session duration update failed', sessionUpdateError);
+        throw new Error(
+          sessionUpdateError.code === 'PGRST204'
+            ? 'Session duration columns are missing. Apply the latest Supabase migration, then try again.'
+            : `Failed to update session duration: ${sessionUpdateError.message}`,
+        );
+      }
+    }
     const { data: sgRows } = await supabase
       .from('student_groups').select('student_id').eq('group_id', (sRow as any).group_id);
     const allIds: string[] = (sgRows ?? []).map((r: any) => r.student_id);
@@ -694,10 +726,9 @@ export const api = {
     );
     const toMark = allIds.filter((sid) => !done.has(sid));
     if (toMark.length === 0) return 0;
-    const now = new Date().toISOString();
     const actor = await getCurrentTeacher();
     await supabase.from('attendance').upsert(
-      toMark.map((student_id) => ({ session_id: sessionId, student_id, status: 'absent', updated_at: now })),
+      toMark.map((student_id) => ({ session_id: sessionId, student_id, status: 'absent', updated_at: endedAt })),
       { onConflict: 'session_id,student_id' },
     );
     await supabase.from('audit_log').insert(
@@ -836,11 +867,19 @@ export const api = {
     if (error) throw error;
   },
 
-  async updateTeacherRole(teacherId: string, role: 'admin' | 'lecturer' | 'teacher'): Promise<void> {
+  async createSession(data: {
+    module_id: string;
+    group_id: string;
+    session_date: string;
+    start_time: string;
+    session_type: 'lecture' | 'td' | 'tp' | 'exam';
+    week: number;
+  }): Promise<void> {
     const { error } = await supabase
-      .from('teachers')
-      .update({ role })
-      .eq('id', teacherId);
+      .from('sessions')
+      .insert([data]);
     if (error) throw error;
   },
+
+
 };
