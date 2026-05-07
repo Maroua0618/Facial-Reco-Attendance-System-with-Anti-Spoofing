@@ -174,6 +174,7 @@ export const api = {
       total_students: totalStudents,
       total_modules: f.moduleId ? 1 : modulesAll.length,
       total_groups: f.groupId ? 1 : groupsAll.length,
+      total_sessions: fs.length,
       sessions_this_week: fs.filter((s) => s.week === maxWeek).length,
       overall_attendance_rate: att.length ? present / att.length : 0,
     };
@@ -771,6 +772,41 @@ export const api = {
         );
       if (e2) {
         errors.push(`"${row.full_name}": group link — ${e2.message}`);
+        skipped++;
+        continue;
+      }
+      ok++;
+    }
+    return { ok, skipped, errors };
+  },
+  // ---- teacher management (used by TeachersList page) ----
+  async getAllTeachers(): Promise<Teacher[]> {
+    return fetchAll<Teacher>('teachers', adaptTeacher);
+  },
+
+  async updateTeacher(id: string, patch: { full_name?: string; email?: string }): Promise<void> {
+    const { error } = await supabase.from('teachers').update(patch).eq('id', id);
+    if (error) throw error;
+  },
+
+  async deleteTeacher(id: string): Promise<void> {
+    const { error } = await supabase.from('teachers').delete().eq('id', id);
+    if (error) {
+      if ((error as any).code === '23503')
+        throw new Error('Cannot delete — teacher has linked records.');
+      throw error;
+    }
+  },
+
+  async importTeachers(rows: { full_name: string; email: string }[]): Promise<{ ok: number; skipped: number; errors: string[] }> {
+    let ok = 0, skipped = 0; const errors: string[] = [];
+    for (const r of rows) {
+      const { data, error } = await supabase.from('teachers').upsert(
+        { full_name: r.full_name.trim(), email: r.email.trim() },
+        { onConflict: 'email', ignoreDuplicates: true },
+      ).select('id').single();
+      if (error || !data) {
+        errors.push(`${r.full_name}: ${error?.message ?? 'insert failed'}`);
         skipped++;
         continue;
       }
