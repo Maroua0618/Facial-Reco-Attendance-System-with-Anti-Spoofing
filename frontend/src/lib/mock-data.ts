@@ -53,7 +53,7 @@ function adaptGroup(r: any): Group {
 function adaptTeacher(r: any): Teacher {
   return {
     id: r.id, full_name: r.full_name, email: r.email ?? '',
-    role: r.role ?? 'teacher', created_at: r.created_at ?? '',
+    role: r.role ?? 'teacher', auth_user_id: r.auth_user_id, created_at: r.created_at ?? '',
   };
 }
 function adaptSession(r: any): Session {
@@ -97,7 +97,7 @@ async function getCurrentTeacher(): Promise<Teacher | null> {
     if (rows) return adaptTeacher(rows);
   }
   const teachers = await fetchAll('teachers', adaptTeacher);
-  return teachers.find((t) => t.role === 'admin') ?? teachers[0] ?? null;
+  return teachers[0] ?? null;
 }
 
 function filterSessions(rows: Session[], f: { moduleId?: string; groupId?: string }): Session[] {
@@ -833,6 +833,20 @@ export const api = {
       .from('modules')
       .update(patch)
       .eq('id', moduleId);
+    if (error) throw error;
+  },
+
+  async createSession(data: {
+    module_id: string;
+    group_id: string;
+    session_date: string;
+    start_time: string;
+    session_type: 'lecture' | 'td' | 'tp' | 'exam';
+    week: number;
+  }): Promise<void> {
+    const { error } = await supabase
+      .from('sessions')
+      .insert([data]);
     if (error) throw error;
   },
 
