@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Scan, Mail, Lock, Eye, EyeOff, GraduationCap, BookOpen } from "lucide-react";
+import {
+  Scan,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  GraduationCap,
+  BookOpen,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,7 +93,10 @@ export default function Login() {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setIsSendingReset(false);
-    if (error) { setForgotError(error.message); return; }
+    if (error) {
+      setForgotError(error.message);
+      return;
+    }
     setForgotSent(true);
   };
 
@@ -101,9 +112,13 @@ export default function Login() {
     setIsSigningUp(false);
     if (error) {
       setSignupError(friendlySignupError(error.message));
-    } else if (data?.user && data.user.identities && data.user.identities.length === 0) {
+    } else if (
+      data?.user &&
+      data.user.identities &&
+      data.user.identities.length === 0
+    ) {
       // Email already exists in auth but unconfirmed — resend the code and go to OTP screen
-      await supabase.auth.resend({ type: 'signup', email: signupEmail });
+      await supabase.auth.resend({ type: "signup", email: signupEmail });
       setShowOtpInput(true);
     } else {
       setShowOtpInput(true);
@@ -120,8 +135,11 @@ export default function Login() {
       type: "email",
     });
     setIsVerifyingOtp(false);
-    if (error) { setOtpError(error.message); }
-    else { navigate("/dashboard", { replace: true }); }
+    if (error) {
+      setOtpError(error.message);
+    } else {
+      navigate("/dashboard", { replace: true });
+    }
   };
 
   return (
@@ -134,13 +152,18 @@ export default function Login() {
         className="relative z-10 w-full max-w-md mx-4"
       >
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 font-bold text-xl mb-2">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 font-bold text-xl mb-2"
+          >
             <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
               <Scan className="w-6 h-6 text-primary" />
             </div>
             <span>FaceGuard</span>
           </Link>
-          <p className="text-muted-foreground text-sm">Secure AI-powered authentication</p>
+          <p className="text-muted-foreground text-sm">
+            Secure AI-powered authentication
+          </p>
         </div>
         <div className="glass rounded-2xl p-8">
           <Tabs defaultValue={defaultTab}>
@@ -152,14 +175,23 @@ export default function Login() {
             <TabsContent value="login">
               {!forgotMode ? (
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  {loginError && <div className="text-sm font-medium text-destructive">{loginError}</div>}
+                  {loginError && (
+                    <div className="text-sm font-medium text-destructive">
+                      {loginError}
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
-                        id="email" type="email" placeholder="you@ensia.edu.dz" className="pl-10"
-                        value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required
+                        id="email"
+                        type="email"
+                        placeholder="you@ensia.edu.dz"
+                        className="pl-10"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        required
                       />
                     </div>
                   </div>
@@ -169,7 +201,12 @@ export default function Login() {
                       <button
                         type="button"
                         className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                        onClick={() => { setForgotMode(true); setForgotEmail(loginEmail); setForgotSent(false); setForgotError(null); }}
+                        onClick={() => {
+                          setForgotMode(true);
+                          setForgotEmail(loginEmail);
+                          setForgotSent(false);
+                          setForgotError(null);
+                        }}
                       >
                         Forgot password?
                       </button>
@@ -177,46 +214,78 @@ export default function Login() {
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
-                        id="password" type={showPassword ? "text" : "password"} placeholder="········"
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="········"
                         className="pl-10 pr-10"
-                        value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        required
                       />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
                       </button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full glow-sm" disabled={isLoggingIn}>
+                  <Button
+                    type="submit"
+                    className="w-full glow-sm"
+                    disabled={isLoggingIn}
+                  >
                     {isLoggingIn ? "Signing In..." : "Sign In"}
                   </Button>
                 </form>
               ) : (
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-base font-medium">Reset your password</h3>
+                    <h3 className="text-base font-medium">
+                      Reset your password
+                    </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Enter your @ensia.edu.dz email and we'll send a reset link.
+                      Enter your @ensia.edu.dz email and we'll send a reset
+                      link.
                     </p>
                   </div>
                   {forgotSent ? (
                     <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
-                      Reset link sent to <strong>{forgotEmail}</strong>. Check your inbox.
+                      Reset link sent to <strong>{forgotEmail}</strong>. Check
+                      your inbox.
                     </div>
                   ) : (
                     <form onSubmit={handleForgotPassword} className="space-y-4">
-                      {forgotError && <div className="text-sm font-medium text-destructive">{forgotError}</div>}
+                      {forgotError && (
+                        <div className="text-sm font-medium text-destructive">
+                          {forgotError}
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label htmlFor="forgot-email">Email</Label>
                         <div className="relative">
                           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                           <Input
-                            id="forgot-email" type="email" placeholder="you@ensia.edu.dz" className="pl-10"
-                            value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} required
+                            id="forgot-email"
+                            type="email"
+                            placeholder="you@ensia.edu.dz"
+                            className="pl-10"
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                            required
                           />
                         </div>
                       </div>
-                      <Button type="submit" className="w-full glow-sm" disabled={isSendingReset}>
+                      <Button
+                        type="submit"
+                        className="w-full glow-sm"
+                        disabled={isSendingReset}
+                      >
                         {isSendingReset ? "Sending..." : "Send reset link"}
                       </Button>
                     </form>
@@ -235,12 +304,19 @@ export default function Login() {
             <TabsContent value="signup">
               {!showOtpInput ? (
                 <form onSubmit={handleSignupSubmit} className="space-y-4">
-                  {signupError && <div className="text-sm font-medium text-destructive">{signupError}</div>}
+                  {signupError && (
+                    <div className="text-sm font-medium text-destructive">
+                      {signupError}
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name</Label>
                     <Input
-                      id="name" placeholder="Zoubir Bousnina"
-                      value={signupName} onChange={(e) => setSignupName(e.target.value)} required
+                      id="name"
+                      placeholder="Zoubir Bousnina"
+                      value={signupName}
+                      onChange={(e) => setSignupName(e.target.value)}
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -248,90 +324,100 @@ export default function Login() {
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
-                        id="signup-email" type="email" placeholder="you@ensia.edu.dz" className="pl-10"
-                        value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} required
+                        id="signup-email"
+                        type="email"
+                        placeholder="you@ensia.edu.dz"
+                        className="pl-10"
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                        required
                       />
                     </div>
-                    <p className="text-[11px] text-muted-foreground">Only @ensia.edu.dz emails can sign up.</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Only @ensia.edu.dz emails can sign up.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
-                        id="signup-password" type={showPassword ? "text" : "password"} placeholder="········"
+                        id="signup-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="········"
                         className="pl-10 pr-10"
-                        value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} required
+                        value={signupPassword}
+                        onChange={(e) => setSignupPassword(e.target.value)}
+                        required
                       />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
                       </button>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>I am a</Label>
-                    <RadioGroup
-                      value={signupRole}
-                      onValueChange={(v) => setSignupRole(v as RoleChoice)}
-                      className="grid grid-cols-2 gap-2"
-                    >
-                      <label
-                        htmlFor="role-teacher"
-                        className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${
-                          signupRole === "teacher" ? "border-primary bg-primary/10" : "border-border hover:border-muted-foreground"
-                        }`}
-                      >
-                        <RadioGroupItem value="teacher" id="role-teacher" />
-                        <GraduationCap className="w-4 h-4" />
-                        <span className="text-sm">Teacher</span>
-                      </label>
-                      <label
-                        htmlFor="role-lecturer"
-                        className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${
-                          signupRole === "lecturer" ? "border-primary bg-primary/10" : "border-border hover:border-muted-foreground"
-                        }`}
-                      >
-                        <RadioGroupItem value="lecturer" id="role-lecturer" />
-                        <BookOpen className="w-4 h-4" />
-                        <span className="text-sm">Lecturer</span>
-                      </label>
-                    </RadioGroup>
-                    <p className="text-[11px] text-muted-foreground">
-                      Lecturers own modules; teachers are assigned to TD/TP groups.
-                      First-ever signup is automatically promoted to admin.
-                    </p>
-                  </div>
-                  <Button type="submit" className="w-full glow-sm" disabled={isSigningUp}>
+
+                  <Button
+                    type="submit"
+                    className="w-full glow-sm"
+                    disabled={isSigningUp}
+                  >
                     {isSigningUp ? "Creating Account..." : "Create Account"}
                   </Button>
                 </form>
               ) : (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="text-center mb-4">
-                    <h3 className="text-lg font-medium text-foreground">Verify your email</h3>
+                    <h3 className="text-lg font-medium text-foreground">
+                      Verify your email
+                    </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      We've sent a verification code to{' '}
+                      We've sent a verification code to{" "}
                       <span className="text-primary">{signupEmail}</span>.
                     </p>
                   </div>
-                  {otpError && <div className="text-sm font-medium text-destructive text-center">{otpError}</div>}
+                  {otpError && (
+                    <div className="text-sm font-medium text-destructive text-center">
+                      {otpError}
+                    </div>
+                  )}
                   <div className="space-y-2">
-                    <Label htmlFor="otp" className="text-center block">Verification Code</Label>
+                    <Label htmlFor="otp" className="text-center block">
+                      Verification Code
+                    </Label>
                     <Input
-                      id="otp" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={8} placeholder="········"
-                      value={otp} onChange={(e) => setOtp(e.target.value)}
+                      id="otp"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={8}
+                      placeholder="········"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
                       className="text-center tracking-[0.5em] text-lg font-mono placeholder:tracking-normal"
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full glow-sm bg-primary hover:bg-primary/90 text-primary-foreground"
-                    disabled={isVerifyingOtp || otp.length < 6}>
+                  <Button
+                    type="submit"
+                    className="w-full glow-sm bg-primary hover:bg-primary/90 text-primary-foreground"
+                    disabled={isVerifyingOtp || otp.length < 6}
+                  >
                     {isVerifyingOtp ? "Verifying..." : "Verify Code"}
                   </Button>
                   <div className="text-center mt-4 text-sm">
-                    <button type="button" onClick={() => setShowOtpInput(false)}
-                      className="text-muted-foreground hover:text-primary transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => setShowOtpInput(false)}
+                      className="text-muted-foreground hover:text-primary transition-colors"
+                    >
                       Back to sign up
                     </button>
                   </div>
