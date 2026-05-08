@@ -329,7 +329,7 @@ export const api = {
     });
   },
 
-  async getRecentSessions(f: DashboardFilters = {}, limit = 10): Promise<SessionRow[]> {
+  async getRecentSessions(f: DashboardFilters = {}, limit = 4): Promise<SessionRow[]> {
     const teacher = await getCurrentTeacher();
     const scope = await getTeacherScope(teacher);
     const [sessionsAll, modulesAll, groupsAll, attendanceAll] = await Promise.all([
@@ -346,7 +346,7 @@ export const api = {
 
   async getStudentRanking(
     f: DashboardFilters = {},
-    limit = 5,
+    limit = 3,
   ): Promise<{ worst: RankedStudent[]; best: RankedStudent[] }> {
     const [sessionsAll, attendanceAll, studentsAll] = await Promise.all([
       fetchAll<Session>('sessions', adaptSession),

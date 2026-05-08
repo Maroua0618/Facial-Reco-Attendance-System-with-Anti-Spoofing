@@ -53,21 +53,24 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
 
   // Filter groups based on role
   // Teachers can only see groups where they're assigned as teacher
-  const { data: teacherGroups = [] } = useQuery({
-    queryKey: ['teacher-groups', teacher?.id],
+  const { data: teacherAssignments = [] } = useQuery({
+    queryKey: ['teacher-assignments', teacher?.id],
     queryFn: async () => {
       if (!teacher?.id || isAdmin) return [];
       const { data } = await supabase
         .from('module_groups')
-        .select('group_id')
+        .select('group_id, module_id')
         .eq('assigned_teacher_id', teacher.id);
-      return data?.map(item => item.group_id) || [];
+      return data || [];
     },
     enabled: !!teacher?.id && !isAdmin,
   });
 
-  const visibleGroups = isAdmin ? groups : groups.filter(g => teacherGroups.includes(g.id));
-  const visibleModules = isAdmin ? modules : modules.filter(m => m.lecturer_id === teacher?.id);
+  const teacherGroupIds = teacherAssignments.map(item => item.group_id);
+  const teacherModuleIds = teacherAssignments.map(item => item.module_id);
+
+  const visibleGroups = isAdmin ? groups : groups.filter(g => teacherGroupIds.includes(g.id));
+  const visibleModules = isAdmin ? modules : modules.filter(m => m.lecturer_id === teacher?.id || teacherModuleIds.includes(m.id));
 
   const createSessionMut = useMutation({
     mutationFn: async () => {
