@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate, Outlet } from "react-router-dom";
+import {
+  BrowserRouter,
+  Route,
+  Routes,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -32,11 +38,13 @@ const ProtectedRoute = () => {
   const { session, loading } = useAuth();
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">Loading...</div>
+      <div className="flex h-screen items-center justify-center">
+        Loading...
+      </div>
     );
   }
   if (!session) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
   return <Outlet />;
 };
@@ -66,7 +74,10 @@ const App = () => (
                 <Route path="/students" element={<StudentsList />} />
                 <Route path="/teachers" element={<TeachersList />} />
                 <Route path="/assignments" element={<Assignments />} />
-                <Route path="/students/register" element={<RegisterStudent />} />
+                <Route
+                  path="/students/register"
+                  element={<RegisterStudent />}
+                />
                 <Route path="/students/:id" element={<StudentProfile />} />
                 <Route path="/attendance" element={<Attendance />} />
                 <Route path="/history" element={<AttendanceHistory />} />
