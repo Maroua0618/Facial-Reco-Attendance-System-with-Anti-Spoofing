@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Card } from '@/components/ui/card';
+import { useEffect, useRef, useState } from "react";
+import { Card } from "@/components/ui/card";
 
 interface Props {
   onReady?: (video: HTMLVideoElement) => void;
@@ -36,14 +36,14 @@ export function CameraFeed({ onReady, onFrame, intervalMs, className }: Props) {
           // React StrictMode remount can interrupt the first play() promise.
           // Browser surfaces it as AbortError. Ignore it.
           const name = (err as { name?: string })?.name;
-          if (name && name !== 'AbortError') throw err;
+          if (name && name !== "AbortError") throw err;
         }
         if (cancelled) return;
         setStreaming(true);
         onReady?.(v);
       } catch (e: unknown) {
         if (cancelled) return;
-        const msg = e instanceof Error ? e.message : 'Camera access denied';
+        const msg = e instanceof Error ? e.message : "Camera access denied";
         setError(msg);
       }
     })();
@@ -65,7 +65,7 @@ export function CameraFeed({ onReady, onFrame, intervalMs, className }: Props) {
       if (!v || !c) return;
       c.width = v.videoWidth;
       c.height = v.videoHeight;
-      const ctx = c.getContext('2d');
+      const ctx = c.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(v, 0, 0);
       onFrame(c);
@@ -76,7 +76,13 @@ export function CameraFeed({ onReady, onFrame, intervalMs, className }: Props) {
   return (
     <Card className={className}>
       <div className="relative aspect-video bg-black rounded overflow-hidden">
-        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover transform -scale-x-100"
+          playsInline
+          muted
+          autoPlay
+        />
         <canvas ref={canvasRef} className="hidden" />
         {error && (
           <div className="absolute inset-0 flex items-center justify-center text-destructive bg-background/80 text-sm p-4 text-center">

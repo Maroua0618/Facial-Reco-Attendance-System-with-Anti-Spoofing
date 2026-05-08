@@ -96,7 +96,7 @@ export interface DashboardStats {
   avg_attendance_rate?: number;
   recent_sessions?: SessionSummary[];
   sessions_this_week?: number;
-    sessions_done_this_week?: number;
+  sessions_done_this_week?: number;
   overall_attendance_rate?: number;
 }
 

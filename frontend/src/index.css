@@ -1,8 +1,7 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+﻿@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
 
 @layer base {
   :root {
@@ -81,11 +80,15 @@
   }
 
   .glow-md {
-    box-shadow: 0 0 40px hsl(var(--glow-primary)), 0 0 80px hsl(var(--glow-primary));
+    box-shadow:
+      0 0 40px hsl(var(--glow-primary)),
+      0 0 80px hsl(var(--glow-primary));
   }
 
   .glow-lg {
-    box-shadow: 0 0 60px hsl(var(--glow-primary)), 0 0 120px hsl(var(--glow-primary));
+    box-shadow:
+      0 0 60px hsl(var(--glow-primary)),
+      0 0 120px hsl(var(--glow-primary));
   }
 
   .text-gradient {
@@ -93,7 +96,7 @@
   }
 
   .grid-pattern {
-    background-image: 
+    background-image:
       linear-gradient(hsl(220 14% 16% / 0.3) 1px, transparent 1px),
       linear-gradient(90deg, hsl(220 14% 16% / 0.3) 1px, transparent 1px);
     background-size: 60px 60px;
@@ -110,17 +113,42 @@
   }
 
   @keyframes scan {
-    0%, 100% { transform: translateY(-100%); }
-    50% { transform: translateY(100%); }
+    0%,
+    100% {
+      transform: translateY(-100%);
+    }
+    50% {
+      transform: translateY(100%);
+    }
   }
 
   @keyframes pulse-glow {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 
   @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
   }
+}
+
+/* Hide browser-native password reveal icons */
+::-ms-reveal,
+::-ms-clear {
+  display: none;
+}
+input[type="password"]::-webkit-password-reveal-button {
+  display: none !important;
+  -webkit-appearance: none !important;
 }

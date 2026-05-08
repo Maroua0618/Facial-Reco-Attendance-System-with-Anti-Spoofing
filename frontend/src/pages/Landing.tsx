@@ -1,8 +1,18 @@
 import { Navbar } from "@/components/landing/Navbar";
 import { HeroSection } from "@/components/landing/HeroSection";
 import { FeaturesSection } from "@/components/landing/FeaturesSection";
+import { useEffect } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Landing() {
+  const { signOut, session } = useAuth();
+
+  useEffect(() => {
+    if (session) {
+      signOut();
+    }
+  }, [session, signOut]);
+
   return (
     <div className="min-h-screen">
       <Navbar />

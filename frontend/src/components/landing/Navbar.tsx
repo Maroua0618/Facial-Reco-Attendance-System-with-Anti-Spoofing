@@ -18,7 +18,7 @@ export function Navbar() {
             <Link to="/login">Login</Link>
           </Button>
           <Button size="sm" className="glow-sm" asChild>
-            <Link to="/login">Get Started</Link>
+            <Link to="/login?tab=signup">Get Started</Link>
           </Button>
         </div>
       </div>

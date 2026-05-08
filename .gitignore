@@ -18,10 +18,24 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+venv_fresh/
 env/
 .venv/
 .env
+*.egg-info/
 *.sqlite3
 *.db
 .pytest_cache/
+
+# Frontend
+node_modules/
+dist/
+.DS_Store
+
+# Deployment
+.vercel/
+
+# Version Control
+.github/
+
 
