@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -11,8 +11,27 @@ import ImportStudentsTab from '@/components/assignments/ImportStudentsTab';
 import AssignTeachersTab from '@/components/assignments/AssignTeachersTab';
 import ScheduleSessionsTab from '@/components/assignments/ScheduleSessionsTab';
 
+import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+
 export default function Assignments() {
-  const [activeTab, setActiveTab] = useState('import-students');
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get('tab') === 'schedule' ? 'schedule-sessions' : 'import-students';
+  const [activeTab, setActiveTab] = useState(defaultTab);
+  
+  const { user } = useAuth();
+  const { data: teacher } = useQuery({
+    queryKey: ['current-teacher-role', user?.id],
+    queryFn: () => api.getCurrentTeacher(),
+    enabled: !!user?.id,
+  });
+  const isAdmin = teacher?.role === 'admin';
+
+  useEffect(() => {
+    if (teacher && !isAdmin && activeTab !== 'schedule-sessions') {
+      setActiveTab('schedule-sessions');
+    }
+  }, [teacher, isAdmin, activeTab]);
 
   const { data: groups = [] } = useQuery({
     queryKey: ['groups'],
@@ -30,8 +49,8 @@ export default function Assignments() {
   });
 
   const tabs = [
-    { id: 'import-students', label: 'Import Students', icon: Upload },
-    { id: 'assign-teachers', label: 'Assign Teachers', icon: Users },
+    ...(isAdmin ? [{ id: 'import-students', label: 'Import Students', icon: Upload }] : []),
+    ...(isAdmin ? [{ id: 'assign-teachers', label: 'Assign Teachers', icon: Users }] : []),
     { id: 'schedule-sessions', label: 'Schedule Sessions', icon: Calendar },
   ];
 

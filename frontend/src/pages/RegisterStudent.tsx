@@ -48,7 +48,7 @@ export default function RegisterStudent() {
   const [embeddings, setEmbeddings] = useState<number[][]>([]);
   const [busy, setBusy] = useState(false);
 
-  const { data: groups = [] } = useQuery({ queryKey: ['groups'], queryFn: api.getGroups });
+  const { data: groups = [] } = useQuery({ queryKey: ['visible-groups'], queryFn: api.getVisibleGroups });
 
   const { data: rows = [], isLoading: isLoadingStudents } = useQuery<Row[]>({
     queryKey: ['students-flat', groups.map((g) => g.id)],

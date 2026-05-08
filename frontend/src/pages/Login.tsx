@@ -10,7 +10,6 @@ import { Link, useNavigate, Navigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-type RoleChoice = "teacher" | "lecturer";
 
 function friendlySignupError(msg: string | undefined): string {
   if (!msg) return "Sign-up failed.";
@@ -45,7 +44,6 @@ export default function Login() {
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
-  const [signupRole, setSignupRole] = useState<RoleChoice>("teacher");
   const [signupError, setSignupError] = useState<string | null>(null);
   const [isSigningUp, setIsSigningUp] = useState(false);
 
@@ -93,10 +91,12 @@ export default function Login() {
     e.preventDefault();
     setIsSigningUp(true);
     setSignupError(null);
+
+    // Proceed with signup
     const { data, error } = await supabase.auth.signUp({
       email: signupEmail,
       password: signupPassword,
-      options: { data: { full_name: signupName, role: signupRole } },
+      options: { data: { full_name: signupName } },
     });
     setIsSigningUp(false);
     if (error) {
@@ -114,14 +114,46 @@ export default function Login() {
     e.preventDefault();
     setIsVerifyingOtp(true);
     setOtpError(null);
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email: signupEmail,
       token: otp,
       type: "email",
     });
+    
+    if (error) { 
+      setOtpError(error.message); 
+      setIsVerifyingOtp(false);
+      return;
+    }
+    
+    // Identity confirmed! Link the auth_user_id to the existing teacher row.
+    if (data?.user) {
+      const { data: teachers } = await supabase.from('teachers').select('*').eq('email', signupEmail);
+      if (teachers && teachers.length > 1) {
+         // A trigger might have auto-created a duplicate row.
+         // Let's find the pre-assigned one (which has no auth_user_id or is older) and the new one.
+         const newOne = teachers.find(t => t.auth_user_id === data.user?.id);
+         const oldOne = teachers.find(t => t.auth_user_id !== data.user?.id);
+         if (newOne && oldOne) {
+            // Delete the duplicate newly created by trigger
+            await supabase.from('teachers').delete().eq('id', newOne.id);
+            // Link auth to the original pre-assigned row
+            await supabase.from('teachers').update({ auth_user_id: data.user.id, full_name: signupName }).eq('id', oldOne.id);
+         }
+      } else if (teachers && teachers.length === 1) {
+         // Just link it
+         await supabase.from('teachers').update({ auth_user_id: data.user.id, full_name: signupName }).eq('id', teachers[0].id);
+      } else {
+         // The user authenticated but is not in the teachers list!
+         await supabase.auth.signOut();
+         setOtpError("Your email is not registered as a teacher. Please contact the administration.");
+         setIsVerifyingOtp(false);
+         return;
+      }
+    }
+    
     setIsVerifyingOtp(false);
-    if (error) { setOtpError(error.message); }
-    else { navigate("/dashboard", { replace: true }); }
+    navigate("/dashboard", { replace: true });
   };
 
   return (
@@ -269,39 +301,7 @@ export default function Login() {
                       </button>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>I am a</Label>
-                    <RadioGroup
-                      value={signupRole}
-                      onValueChange={(v) => setSignupRole(v as RoleChoice)}
-                      className="grid grid-cols-2 gap-2"
-                    >
-                      <label
-                        htmlFor="role-teacher"
-                        className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${
-                          signupRole === "teacher" ? "border-primary bg-primary/10" : "border-border hover:border-muted-foreground"
-                        }`}
-                      >
-                        <RadioGroupItem value="teacher" id="role-teacher" />
-                        <GraduationCap className="w-4 h-4" />
-                        <span className="text-sm">Teacher</span>
-                      </label>
-                      <label
-                        htmlFor="role-lecturer"
-                        className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${
-                          signupRole === "lecturer" ? "border-primary bg-primary/10" : "border-border hover:border-muted-foreground"
-                        }`}
-                      >
-                        <RadioGroupItem value="lecturer" id="role-lecturer" />
-                        <BookOpen className="w-4 h-4" />
-                        <span className="text-sm">Lecturer</span>
-                      </label>
-                    </RadioGroup>
-                    <p className="text-[11px] text-muted-foreground">
-                      Lecturers own modules; teachers are assigned to TD/TP groups.
-                      First-ever signup is automatically promoted to admin.
-                    </p>
-                  </div>
+
                   <Button type="submit" className="w-full glow-sm" disabled={isSigningUp}>
                     {isSigningUp ? "Creating Account..." : "Create Account"}
                   </Button>

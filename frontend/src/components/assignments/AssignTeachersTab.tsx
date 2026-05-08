@@ -24,7 +24,8 @@ interface AssignTeachersTabProps {
 
 export default function AssignTeachersTab({ teachers, modules }: AssignTeachersTabProps) {
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
-  const [assignments, setAssignments] = useState<Record<string, string>>({});
+  // assignments state structure: Record<groupId, { td: string, tp: string }>
+  const [assignments, setAssignments] = useState<Record<string, { td?: string; tp?: string }>>({});
   const qc = useQueryClient();
 
   const { data: moduleDetail } = useQuery({
@@ -49,17 +50,17 @@ export default function AssignTeachersTab({ teachers, modules }: AssignTeachersT
   };
 
   const typeLabels: Record<string, string> = {
-    'td': 'Tutorial',
-    'tp': 'Lab',
-    'cours': 'Lecture',
-    'exam': 'Exam'
+    'td': 'Tutorial (TD)',
+    'tp': 'Lab (TP)',
   };
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const updates = Object.entries(assignments).map(([groupId, teacherId]) =>
-        api.assignTeacherToGroup(groupId, selectedModuleId!, teacherId),
-      );
+      const updates: Promise<void>[] = [];
+      for (const [groupId, types] of Object.entries(assignments)) {
+        if (types.td) updates.push(api.assignTeacherToGroup(groupId, selectedModuleId!, types.td, 'td'));
+        if (types.tp) updates.push(api.assignTeacherToGroup(groupId, selectedModuleId!, types.tp, 'tp'));
+      }
       await Promise.all(updates);
     },
     onSuccess: () => {
@@ -99,47 +100,57 @@ export default function AssignTeachersTab({ teachers, modules }: AssignTeachersT
                 <TableHeader>
                   <TableRow>
                     <TableHead>Group</TableHead>
-                    <TableHead>Year</TableHead>
-                    <TableHead>Session Types</TableHead>
-                    <TableHead>Current Teacher</TableHead>
-                    <TableHead>Assign Teacher</TableHead>
+                    <TableHead>Current TD Teacher</TableHead>
+                    <TableHead>Assign TD</TableHead>
+                    <TableHead>Current TP Teacher</TableHead>
+                    <TableHead>Assign TP</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {moduleDetail.groups.map((g) => {
-                    const sessionTypes = getSessionTypesForGroup(g.id, selectedModuleId!);
                     return (
                       <TableRow key={g.id}>
-                        <TableCell className="font-medium">{g.group_name}</TableCell>
-                        <TableCell>Y{g.year}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1 flex-wrap">
-                            {sessionTypes.length > 0 ? (
-                              sessionTypes.map(type => (
-                                <Badge key={type} variant="secondary" className="text-xs">
-                                  {typeLabels[type] || type}
-                                </Badge>
-                              ))
-                            ) : (
-                              <span className="text-xs text-muted-foreground">No sessions</span>
-                            )}
-                          </div>
-                        </TableCell>
+                        <TableCell className="font-medium">{g.group_name} (Y{g.year})</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {g.assigned_teacher_name || '—'}
+                          {g.assigned_teacher_name_td || '—'}
                         </TableCell>
                         <TableCell>
                           <Select
-                            value={assignments[g.id] || ''}
+                            value={assignments[g.id]?.td || g.assigned_teacher_id_td || ''}
                             onValueChange={(teacherId) =>
-                              setAssignments({
-                                ...assignments,
-                                [g.id]: teacherId,
-                              })
+                              setAssignments(prev => ({
+                                ...prev,
+                                [g.id]: { ...prev[g.id], td: teacherId }
+                              }))
                             }
                           >
-                            <SelectTrigger className="w-48">
-                              <SelectValue placeholder="Choose teacher..." />
+                            <SelectTrigger className="w-40">
+                              <SelectValue placeholder="TD Teacher" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {teachers.filter((t) => t.role !== 'admin').map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  {t.full_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {g.assigned_teacher_name_tp || '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={assignments[g.id]?.tp || g.assigned_teacher_id_tp || ''}
+                            onValueChange={(teacherId) =>
+                              setAssignments(prev => ({
+                                ...prev,
+                                [g.id]: { ...prev[g.id], tp: teacherId }
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-40">
+                              <SelectValue placeholder="TP Teacher" />
                             </SelectTrigger>
                             <SelectContent>
                               {teachers.filter((t) => t.role !== 'admin').map((t) => (
@@ -163,7 +174,7 @@ export default function AssignTeachersTab({ teachers, modules }: AssignTeachersT
                   onClick={() => saveMut.mutate()}
                   disabled={saveMut.isPending}
                 >
-                  {saveMut.isPending ? 'Saving...' : `Save ${Object.keys(assignments).length} assignment${Object.keys(assignments).length !== 1 ? 's' : ''}`}
+                  {saveMut.isPending ? 'Saving...' : `Save assignments`}
                 </Button>
                 <Button
                   variant="outline"

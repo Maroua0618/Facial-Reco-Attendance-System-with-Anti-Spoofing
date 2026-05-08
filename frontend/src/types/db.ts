@@ -33,7 +33,7 @@ export interface Module {
   created_at: string;
 }
 
-export type SessionType = 'cours' | 'td' | 'tp' | 'exam';
+export type SessionType = 'td' | 'tp';
 
 export interface Session {
   id: string;
@@ -95,7 +95,7 @@ export interface DashboardStats {
   total_groups: number;
   avg_attendance_rate?: number;
   recent_sessions?: SessionSummary[];
-  sessions_this_week?: number;
+  sessions_this_week?: number;`r`n  sessions_done_this_week?: number;
   overall_attendance_rate?: number;
 }
 
@@ -141,3 +141,4 @@ export interface SessionDetail { session: Session; module: Module; group: Group;
 export interface SpoofLogEntry { attendance_id: string; student: Student; session: Session; module: Module; group: Group; marked_at: string | null }
 export interface StudentSessionEntry { session: Session; module: Module; group: Group; status: AttendanceStatus | 'not_marked'; confidence: number | null; marked_at: string | null }
 export interface SystemHealth { avg_confidence: number; match_rate: number; spoof_rate: number; total_marked: number; daily_counts: { date: string; recognized: number; spoof: number }[] }
+

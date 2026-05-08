@@ -36,7 +36,7 @@ export default function StudentsList() {
   const [fileKey, setFileKey] = useState(0);
   const qc = useQueryClient();
 
-  const { data: groups = [] } = useQuery({ queryKey: ['groups'], queryFn: api.getGroups });
+  const { data: groups = [] } = useQuery({ queryKey: ['visible-groups'], queryFn: api.getVisibleGroups });
   const { data: rows = [], isLoading } = useQuery<Row[]>({
     queryKey: ['students-flat', groups.map((g) => g.id)],
     enabled: groups.length > 0,

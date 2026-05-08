@@ -31,7 +31,7 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
   const [sessionDate, setSessionDate] = useState('');
   const [startTime, setStartTime] = useState('08:00');
   const [duration, setDuration] = useState('2');
-  const [sessionType, setSessionType] = useState<'lecture' | 'td' | 'tp' | 'exam'>('lecture');
+  const [sessionType, setSessionType] = useState<'td' | 'tp'>('td');
   const [week, setWeek] = useState<string>('1');
 
   // Get current teacher's role
@@ -103,7 +103,7 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
       setSessionDate('');
       setStartTime('08:00');
       setDuration('2');
-      setSessionType('lecture');
+      setSessionType('td');
       setWeek('1');
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to schedule session'),
@@ -200,10 +200,8 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="lecture">Lecture</SelectItem>
                 <SelectItem value="td">Tutorial (TD)</SelectItem>
                 <SelectItem value="tp">Lab (TP)</SelectItem>
-                <SelectItem value="exam">Exam</SelectItem>
               </SelectContent>
             </Select>
           </div>

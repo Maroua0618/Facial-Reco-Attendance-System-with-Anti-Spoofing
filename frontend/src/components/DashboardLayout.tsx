@@ -29,8 +29,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { backendHealth } from "@/lib/api";
+import { api } from "@/lib/mock-data";
 
 const ROLE_STYLE: Record<string, string> = {
   admin:    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
@@ -53,21 +53,23 @@ function AppSidebarContent({ role }: { role?: string | null }) {
 
   const isAdmin    = role === "admin";
   const isLecturer = role === "lecturer";
+  const isTeacher  = role === "teacher" || !role;
 
   const navItems = [
     { title: "Dashboard",        url: "/dashboard",         icon: LayoutDashboard, show: true },
-    { title: "Curriculum",       url: "/modules",           icon: BookOpen,        show: true },
+    { title: isTeacher ? "My Modules" : "Curriculum", url: "/modules", icon: BookOpen, show: true },
     { title: "Add Module",       url: "/modules/add",       icon: BookOpen,        show: isAdmin || isLecturer },
-    { title: "Register Student", url: "/students/register", icon: UserPlus,        show: true },
-    { title: "Attendance",       url: "/attendance",        icon: Camera,          show: true },
-    { title: "History",          url: "/history",           icon: History,         show: true },
+    { title: "Register Student", url: "/students/register", icon: UserPlus,        show: !isLecturer },
+    { title: "Attendance",       url: "/attendance",        icon: Camera,          show: !isAdmin && !isLecturer },
+    { title: "Schedule",         url: "/assignments?tab=schedule", icon: Activity, show: true },
+    { title: "History",          url: "/history",           icon: History,         show: !isAdmin && !isLecturer },
     { title: "Students",         url: "/students",          icon: Users,           show: true },
     { title: "Teachers",         url: "/teachers",          icon: UserPlus,        show: isAdmin || isLecturer },
   ].filter((i) => i.show);
 
   const securityItems = [
     { title: "Assignments",   url: "/assignments",        icon: Activity,    show: isAdmin },
-    { title: "Security",      url: "/security",           icon: ShieldAlert, show: true },
+    { title: "Security",      url: "/security",           icon: ShieldAlert, show: isAdmin },
     { title: "Spoof log",     url: "/security/spoof-log", icon: ShieldAlert, show: true },
     { title: "Activity log",  url: "/admin/activity",     icon: Activity,    show: isAdmin },
   ].filter((i) => i.show);
@@ -141,15 +143,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
   const { data: teacher } = useQuery({
     queryKey: ["current-teacher-role", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data } = await supabase
-        .from("teachers")
-        .select("role")
-        .eq("auth_user_id", user.id)
-        .maybeSingle();
-      return data as { role: string } | null;
-    },
+    queryFn: () => api.getCurrentTeacher(),
     enabled: !!user?.id,
     staleTime: 60_000,
   });

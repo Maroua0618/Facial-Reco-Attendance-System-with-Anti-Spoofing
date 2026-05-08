@@ -96,16 +96,60 @@ async function fetchAll<T>(table: string, adapter: (r: any) => T): Promise<T[]> 
 // ---------- helpers ----------
 async function getCurrentTeacher(): Promise<Teacher | null> {
   const { data: u } = await supabase.auth.getUser();
-  if (u.user) {
+  if (u.user && u.user.email) {
+    // 1. If auth_user_id exists on a proper row, return it
     const { data: rows } = await supabase
       .from('teachers').select('*').eq('auth_user_id', u.user.id).maybeSingle();
     if (rows) return adaptTeacher(rows);
+
+    // 2. Check if a ghost row exists (id === auth_user.id) 
+    const { data: byId } = await supabase
+      .from('teachers').select('*').eq('id', u.user.id).maybeSingle();
+
+    // 3. Find the REAL predefined row by email
+    const { data: byEmail } = await supabase
+      .from('teachers').select('*').eq('email', u.user.email).maybeSingle();
+
+    if (byEmail) {
+      // Clean up the ghost row if it exists AND it's not the real row
+      if (byId && byId.id !== byEmail.id) {
+         await supabase.from('teachers').delete().eq('id', byId.id);
+      }
+      
+      // Link the real row!
+      await supabase.from('teachers').update({ auth_user_id: u.user.id }).eq('id', byEmail.id);
+      byEmail.auth_user_id = u.user.id;
+      return adaptTeacher(byEmail);
+    }
+    
+    // If no predefined row, but we have a ghost row, return it
+    if (byId) return adaptTeacher(byId);
   }
-  const teachers = await fetchAll('teachers', adaptTeacher);
-  return teachers[0] ?? null;
+  return null;
+}
+
+
+async function getTeacherScope(teacher: Teacher | null) {
+  const scope = {
+    isTeacher: false,
+    myGroupIds: new Set<string>(),
+    myModuleIds: new Set<string>(),
+    sessionFilter: (s: Session) => true
+  };
+  if (teacher && teacher.role !== 'admin') {
+    scope.isTeacher = true;
+    const { data } = await supabase.from('module_groups').select('module_id, group_id').eq('assigned_teacher_id', teacher.id);
+    for (const mg of data ?? []) {
+      scope.myGroupIds.add((mg as any).group_id);
+      scope.myModuleIds.add((mg as any).module_id);
+    }
+    scope.sessionFilter = (s: Session) => scope.myModuleIds.has(s.module_id) && scope.myGroupIds.has(s.group_id);
+  }
+  return scope;
 }
 
 function filterSessions(rows: Session[], f: { moduleId?: string; groupId?: string }): Session[] {
+
   return rows.filter((s) => {
     if (f.moduleId && s.module_id !== f.moduleId) return false;
     if (f.groupId && s.group_id !== f.groupId) return false;
@@ -150,11 +194,43 @@ export interface DashboardFilters {
 
 // ---------- the api ----------
 export const api = {
+  async getCurrentTeacher(): Promise<Teacher | null> {
+    return getCurrentTeacher();
+  },
+
   async getModules(): Promise<Module[]> {
-    return fetchAll('modules', adaptModule);
+    const teacher = await getCurrentTeacher();
+    const scope = await getTeacherScope(teacher);
+    const modulesAll = await fetchAll<Module>('modules', adaptModule);
+    return scope.isTeacher ? modulesAll.filter(m => scope.myModuleIds.has(m.id)) : modulesAll;
   },
   async getGroups(): Promise<Group[]> {
     return fetchAll('groups', adaptGroup);
+  },
+
+  async getVisibleGroups(): Promise<Group[]> {
+    const teacher = await getCurrentTeacher();
+    if (!teacher || teacher.role === 'admin') return fetchAll('groups', adaptGroup);
+
+    const [groupsAll, mgRows] = await Promise.all([
+      fetchAll<Group>('groups', adaptGroup),
+      supabase.from('module_groups').select('group_id, module_id, assigned_teacher_id'),
+    ]);
+
+    if (mgRows.error) {
+      console.error('module_groups visible groups', mgRows.error);
+      return [];
+    }
+
+    const groupIds = new Set<string>();
+    for (const row of mgRows.data ?? []) {
+      if (teacher.role === 'lecturer') {
+        groupIds.add((row as any).group_id);
+      } else if ((row as any).assigned_teacher_id === teacher.id) {
+        groupIds.add((row as any).group_id);
+      }
+    }
+    return groupsAll.filter((g) => groupIds.has(g.id));
   },
 
   async getSessions(): Promise<Session[]> {
@@ -162,39 +238,56 @@ export const api = {
   },
 
   async getStats(f: DashboardFilters = {}): Promise<DashboardStats> {
-    const [sessionsAll, modulesAll, groupsAll, attendanceAll, studentsAll] = await Promise.all([
+    const teacher = await getCurrentTeacher();
+    const scope = await getTeacherScope(teacher);
+
+    const [sessionsAll, modulesAll, groupsAll, attendanceAll, sgRows] = await Promise.all([
       fetchAll<Session>('sessions', adaptSession),
       fetchAll<Module>('modules', adaptModule),
       fetchAll<Group>('groups', adaptGroup),
       fetchAll<Attendance>('attendance', adaptAttendance),
-      fetchAll<Student>('students', adaptStudent),
+      supabase.from('student_groups').select('*')
     ]);
-    const fs = filterSessions(sessionsAll, f);
+    
+    let fs = filterSessions(sessionsAll, f).filter(scope.sessionFilter);
+
     const ids = new Set(fs.map((s) => s.id));
     const att = attendanceAll.filter((a) => ids.has(a.session_id));
     const present = att.filter((a) => a.status === 'present').length;
-    let totalStudents = studentsAll.length;
+
+    let scopedGroups = scope.isTeacher ? groupsAll.filter(g => scope.myGroupIds.has(g.id)) : groupsAll;
     if (f.groupId) {
-      const ids2 = await studentIdsInGroup(f.groupId);
-      totalStudents = ids2.length;
+      scopedGroups = scopedGroups.filter(g => g.id === f.groupId);
     }
-    const maxWeek = Math.max(0, ...fs.map((s) => s.week));
+    const scopedGroupIds = new Set(scopedGroups.map(g => g.id));
+    const scopedStudentIds = new Set((sgRows.data ?? []).filter((sg: any) => scopedGroupIds.has(sg.group_id)).map((sg: any) => sg.student_id));
+    const totalStudents = scopedStudentIds.size;
+
+    const scopedModules = scope.isTeacher ? modulesAll.filter(m => scope.myModuleIds.has(m.id)) : modulesAll;
+
+    const maxWeek = fs.length > 0 ? Math.max(...fs.map((s) => s.week)) : 0;
+    const thisWeekSessions = fs.filter((s) => s.week === maxWeek);
+    const doneThisWeek = thisWeekSessions.filter(s => !!s.actual_ended_at).length;
+
     return {
       total_students: totalStudents,
-      total_modules: f.moduleId ? 1 : modulesAll.length,
-      total_groups: f.groupId ? 1 : groupsAll.length,
+      total_modules: f.moduleId ? 1 : scopedModules.length,
+      total_groups: f.groupId ? 1 : scopedGroups.length,
       total_sessions: fs.length,
-      sessions_this_week: fs.filter((s) => s.week === maxWeek).length,
+      sessions_this_week: thisWeekSessions.length,
+      sessions_done_this_week: doneThisWeek,
       overall_attendance_rate: att.length ? present / att.length : 0,
     };
   },
 
   async getWeeklyAttendance(f: DashboardFilters = {}): Promise<WeeklyPoint[]> {
+    const teacher = await getCurrentTeacher();
+    const scope = await getTeacherScope(teacher);
     const [sessionsAll, attendanceAll] = await Promise.all([
       fetchAll<Session>('sessions', adaptSession),
       fetchAll<Attendance>('attendance', adaptAttendance),
     ]);
-    const fs = filterSessions(sessionsAll, f);
+    const fs = filterSessions(sessionsAll, f).filter(scope.sessionFilter);
     const byWeek = new Map<number, { present: number; total: number; sessions: number }>();
     for (const sess of fs) {
       const slot = byWeek.get(sess.week) ?? { present: 0, total: 0, sessions: 0 };
@@ -210,12 +303,14 @@ export const api = {
   },
 
   async getAttendanceRateByModule(f: DashboardFilters = {}): Promise<ModuleRatePoint[]> {
+    const teacher = await getCurrentTeacher();
+    const scope = await getTeacherScope(teacher);
     const [sessionsAll, attendanceAll, modulesAll] = await Promise.all([
       fetchAll<Session>('sessions', adaptSession),
       fetchAll<Attendance>('attendance', adaptAttendance),
       fetchAll<Module>('modules', adaptModule),
     ]);
-    const fs = filterSessions(sessionsAll, f);
+    const fs = filterSessions(sessionsAll, f).filter(scope.sessionFilter);
     const byModule = new Map<string, { present: number; total: number }>();
     for (const sess of fs) {
       const slot = byModule.get(sess.module_id) ?? { present: 0, total: 0 };
@@ -235,13 +330,15 @@ export const api = {
   },
 
   async getRecentSessions(f: DashboardFilters = {}, limit = 10): Promise<SessionRow[]> {
+    const teacher = await getCurrentTeacher();
+    const scope = await getTeacherScope(teacher);
     const [sessionsAll, modulesAll, groupsAll, attendanceAll] = await Promise.all([
       fetchAll<Session>('sessions', adaptSession),
       fetchAll<Module>('modules', adaptModule),
       fetchAll<Group>('groups', adaptGroup),
       fetchAll<Attendance>('attendance', adaptAttendance),
     ]);
-    return filterSessions(sessionsAll, f).slice()
+    return filterSessions(sessionsAll, f).filter(scope.sessionFilter).slice()
       .sort((a, b) => (b.session_date + b.start_time).localeCompare(a.session_date + a.start_time))
       .slice(0, limit)
       .map((s) => buildSessionRow(s, modulesAll, groupsAll, attendanceAll));
@@ -334,18 +431,29 @@ export const api = {
     const mod = adaptModule(mRow);
     const lecturer = teachersAll.find((t) => t.id === mod.lecturer_id) ?? null;
     const mgs = (mgsRows.data ?? []) as any[];
-    const groupsOut: GroupWithRate[] = mgs.map((mg) => {
-      const grp = groupsAll.find((g) => g.id === mg.group_id)!;
-      const fs = sessionsAll.filter((s) => s.module_id === moduleId && s.group_id === mg.group_id);
+    const uniqueGroupIds = Array.from(new Set(mgs.map(mg => mg.group_id)));
+    const groupsOut: GroupWithRate[] = uniqueGroupIds.map((gid) => {
+      const grp = groupsAll.find((g) => g.id === gid)!;
+      const fs = sessionsAll.filter((s) => s.module_id === moduleId && s.group_id === gid);
       const ids = new Set(fs.map((s) => s.id));
       const att = attendanceAll.filter((a) => ids.has(a.session_id));
       const present = att.filter((a) => a.status === 'present').length;
-      const teacher = teachersAll.find((t) => t.id === mg.assigned_teacher_id);
+      
+      const groupMgs = mgs.filter(mg => mg.group_id === gid);
+      const tdMg = groupMgs.find(mg => mg.session_type === 'td' || !mg.session_type);
+      const tpMg = groupMgs.find(mg => mg.session_type === 'tp');
+      const tdTeacher = tdMg ? teachersAll.find(t => t.id === tdMg.assigned_teacher_id) : null;
+      const tpTeacher = tpMg ? teachersAll.find(t => t.id === tpMg.assigned_teacher_id) : null;
+      
       return {
         ...grp,
         attendance_rate: att.length ? present / att.length : 0,
         session_count: fs.length,
-        assigned_teacher_name: teacher?.full_name ?? null,
+        assigned_teacher_name: tdTeacher?.full_name ?? tpTeacher?.full_name ?? null,
+        assigned_teacher_name_td: tdTeacher?.full_name ?? null,
+        assigned_teacher_name_tp: tpTeacher?.full_name ?? null,
+        assigned_teacher_id_td: tdMg?.assigned_teacher_id ?? null,
+        assigned_teacher_id_tp: tpMg?.assigned_teacher_id ?? null,
       };
     });
     const allFs = sessionsAll.filter((s) => s.module_id === moduleId);
@@ -440,6 +548,8 @@ export const api = {
   },
 
   async getTodaySessions(): Promise<SessionRow[]> {
+    const teacher = await getCurrentTeacher();
+    const scope = await getTeacherScope(teacher);
     const [sessionsAll, modulesAll, groupsAll, attendanceAll] = await Promise.all([
       fetchAll<Session>('sessions', adaptSession),
       fetchAll<Module>('modules', adaptModule),
@@ -447,12 +557,14 @@ export const api = {
       fetchAll<Attendance>('attendance', adaptAttendance),
     ]);
     const today = getDemoToday(sessionsAll);
-    return sessionsAll.filter((s) => s.session_date === today)
+    return sessionsAll.filter((s) => s.session_date === today).filter(scope.sessionFilter)
       .sort((a, b) => a.start_time.localeCompare(b.start_time))
       .map((s) => buildSessionRow(s, modulesAll, groupsAll, attendanceAll));
   },
 
   async getLiveSession() {
+    const teacher = await getCurrentTeacher();
+    const scope = await getTeacherScope(teacher);
     const [sessionsAll, attendanceAll, modulesAll, groupsAll, studentsAll] = await Promise.all([
       fetchAll<Session>('sessions', adaptSession),
       fetchAll<Attendance>('attendance', adaptAttendance),
@@ -461,7 +573,7 @@ export const api = {
       fetchAll<Student>('students', adaptStudent),
     ]);
     const today = getDemoToday(sessionsAll);
-    const todayRows = sessionsAll.filter((s) => s.session_date === today)
+    const todayRows = sessionsAll.filter((s) => s.session_date === today).filter(scope.sessionFilter)
       .sort((a, b) => a.start_time.localeCompare(b.start_time));
     if (todayRows.length === 0) return null;
     const liveSess = todayRows[Math.floor(todayRows.length / 2)] ?? todayRows[0];
@@ -850,12 +962,15 @@ export const api = {
     return { ok, skipped, errors };
   },
 
-  async assignTeacherToGroup(groupId: string, moduleId: string, teacherId: string): Promise<void> {
+  async assignTeacherToGroup(groupId: string, moduleId: string, teacherId: string, sessionType: 'td' | 'tp' = 'td'): Promise<void> {
     const { error } = await supabase
       .from('module_groups')
-      .update({ assigned_teacher_id: teacherId })
-      .eq('module_id', moduleId)
-      .eq('group_id', groupId);
+      .upsert({ 
+         module_id: moduleId,
+         group_id: groupId,
+         assigned_teacher_id: teacherId,
+         session_type: sessionType
+      }, { onConflict: 'module_id,group_id,session_type' });
     if (error) throw error;
   },
 

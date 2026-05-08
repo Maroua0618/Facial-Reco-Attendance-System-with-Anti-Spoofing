@@ -6,6 +6,7 @@ import { Search, Users, ChevronDown, ChevronUp, GraduationCap } from 'lucide-rea
 import { api } from '@/lib/mock-data';
 import { supabase } from '@/integrations/supabase/client';
 import type { Teacher } from '@/types/db';
+import { useAuth } from '@/hooks/useAuth';
 
 function parseYear(moduleCode: string, academicYear?: string, fallbackYear?: number): number {
   const codeYear = moduleCode.match(/Y(\d+)/i)?.[1];
@@ -26,12 +27,19 @@ function parseCurriculumSemester(moduleCode: string, year: number, semester?: st
 }
 
 export default function ModulesList() {
+  const { user } = useAuth();
   const [q, setQ] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<string>('All years');
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
 
+  const { data: teacher } = useQuery({
+    queryKey: ['current-teacher-role', user?.id],
+    queryFn: () => api.getCurrentTeacher(),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
   const { data: modules = [] } = useQuery({ queryKey: ['modules'], queryFn: api.getModules });
-  const { data: groups = [] } = useQuery({ queryKey: ['groups'], queryFn: api.getGroups });
+  const { data: groups = [] } = useQuery({ queryKey: ['visible-groups'], queryFn: api.getVisibleGroups });
   const { data: teachers = [] } = useQuery({ queryKey: ['teachers'], queryFn: api.getAllTeachers });
 
   const { data: moduleGroups = [] } = useQuery({
@@ -92,17 +100,22 @@ export default function ModulesList() {
   }, [filtered]);
 
   const yearLabels: Record<number, string> = { 1: '1ST', 2: '2ND', 3: '3RD', 4: '4TH', 5: '5TH' };
-  const availableYears = [1, 2, 3, 4, 5].filter((year) => groupedByYear[year]?.length);
+  const availableYears = [1, 2, 3, 4, 5].filter((year) => parsedModules.some((m) => m.year === year));
   const availableSemesters = Array.from(new Set(parsedModules.map((m) => m.curriculumSemester)))
     .sort((a, b) => a - b);
+  const isTeacher = teacher?.role === 'teacher' || !teacher?.role;
+  const pageTitle = isTeacher ? 'My Modules' : 'Curriculum';
+  const pageDescription = isTeacher
+    ? `${modules.length} module${modules.length === 1 ? '' : 's'} assigned to your groups`
+    : `All ${modules.length} ENSIA modules across ${availableYears.length || 0} years`;
 
   return (
     <DashboardLayout>
       <div className="space-y-8 max-w-[1200px] mx-auto pb-10">
         <div className="space-y-1">
-          <h1 className="text-3xl font-extrabold tracking-tight">Curriculum</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">{pageTitle}</h1>
           <p className="text-muted-foreground text-sm">
-            All {modules.length} ENSIA modules across 4 years
+            {pageDescription}
           </p>
         </div>
 

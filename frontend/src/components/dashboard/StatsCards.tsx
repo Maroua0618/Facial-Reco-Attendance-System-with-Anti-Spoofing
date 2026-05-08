@@ -11,8 +11,8 @@ export function StatsCards({ stats }: { stats: DashboardStats }) {
     { label: 'Students',           value: stats.total_students,                Icon: Users },
     { label: 'Modules',            value: stats.total_modules,                 Icon: BookOpen },
     { label: 'Groups',             value: stats.total_groups,                  Icon: Layers },
-    { label: 'Sessions this week', value: stats.sessions_this_week,            Icon: CalendarDays },
-    { label: 'Attendance rate',    value: pct(stats.overall_attendance_rate),  Icon: TrendingUp },
+    { label: 'Sessions this week', value: stats.sessions_done_this_week !== undefined ? `${stats.sessions_done_this_week} / ${stats.sessions_this_week}` : stats.sessions_this_week,            Icon: CalendarDays },
+    { label: 'Attendance rate',    value: pct(stats.overall_attendance_rate ?? 0),  Icon: TrendingUp },
   ];
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">

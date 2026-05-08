@@ -20,7 +20,6 @@ import { SystemHealthCard } from '@/components/dashboard/SystemHealthCard';
 import { api, type DashboardFilters as Filters } from '@/lib/mock-data';
 import { downloadCSV, toCSV } from '@/lib/csv';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 
 export default function Dashboard() {
   const [filters, setFilters] = useState<Filters>({});
@@ -32,15 +31,7 @@ export default function Dashboard() {
 
   const { data: teacher } = useQuery({
     queryKey: ['current-teacher-role', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data } = await supabase
-        .from('teachers')
-        .select('role')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-      return data as { role: string } | null;
-    },
+    queryFn: () => api.getCurrentTeacher(),
     enabled: !!user?.id,
     staleTime: 60_000,
   });
@@ -50,7 +41,7 @@ export default function Dashboard() {
   const { data: modules = [], isPending: modulesLoading } =
     useQuery({ queryKey: ['modules'], queryFn: api.getModules });
   const { data: groups = [] } =
-    useQuery({ queryKey: ['groups'],  queryFn: api.getGroups });
+    useQuery({ queryKey: ['visible-groups'],  queryFn: api.getVisibleGroups });
   const { data: stats, isPending: statsLoading } =
     useQuery({ queryKey: ['stats', filters],    queryFn: () => api.getStats(filters) });
   const { data: weekly = [] } =

@@ -12,7 +12,7 @@ import { toCSV, downloadCSV } from '@/lib/csv';
 export default function AttendanceHistory() {
   const [filters, setFilters] = useState<Filters>({});
   const { data: modules = [] } = useQuery({ queryKey: ['modules'], queryFn: api.getModules });
-  const { data: groups = [] } = useQuery({ queryKey: ['groups'], queryFn: api.getGroups });
+  const { data: groups = [] } = useQuery({ queryKey: ['visible-groups'], queryFn: api.getVisibleGroups });
   const { data: rows = [] } = useQuery({
     queryKey: ['history', filters],
     queryFn: () => api.getRecentSessions(filters, 200),
