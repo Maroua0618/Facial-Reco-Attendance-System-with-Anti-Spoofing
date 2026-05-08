@@ -7,17 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { api } from '@/lib/mock-data';
 import type { Teacher, Module, Group } from '@/types/db';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import { Check, ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
 interface AssignTeachersTabProps {
@@ -43,9 +32,6 @@ function TeacherDropdown({
   teacherSessionTypes,
   tpOnly = false,
 }: TeacherOptionProps) {
-  const [open, setOpen] = useState(false);
-  const selectedTeacher = teachers.find((teacher) => teacher.id === value);
-
   const items = teachers
     .filter((teacher) => teacher.role !== 'admin')
     .filter((teacher) => {
@@ -55,49 +41,14 @@ function TeacherDropdown({
     });
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-44 justify-between"
-        >
-          <span className="truncate text-left">
-            {selectedTeacher?.full_name ?? placeholder}
-          </span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search teachers..." />
-          <CommandList>
-            <CommandEmpty>No teacher found.</CommandEmpty>
-            <CommandGroup>
-              {items.map((teacher) => (
-                <CommandItem
-                  key={teacher.id}
-                  value={teacher.full_name}
-                  onSelect={() => {
-                    onChange(teacher.id);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      'mr-2 h-4 w-4',
-                      value === teacher.id ? 'opacity-100' : 'opacity-0',
-                    )}
-                  />
-                  {teacher.full_name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <SearchableSelect
+      items={items}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      renderLabel={(t) => t.full_name}
+      className="w-44"
+    />
   );
 }
 
@@ -124,8 +75,8 @@ export default function AssignTeachersTab({ teachers, modules }: AssignTeachersT
     mutationFn: async () => {
       const updates: Promise<void>[] = [];
       for (const [groupId, types] of Object.entries(assignments)) {
-        if (types.td) updates.push(api.assignTeacherToGroup(groupId, selectedModuleId!, types.td, 'td'));
-        if (types.tp) updates.push(api.assignTeacherToGroup(groupId, selectedModuleId!, types.tp, 'tp'));
+        if (types.td) updates.push(api.assignTeacherToGroup(groupId, selectedModuleId!, types.td));
+        if (types.tp) updates.push(api.assignTeacherToGroup(groupId, selectedModuleId!, types.tp));
       }
       await Promise.all(updates);
     },

@@ -439,20 +439,18 @@ export const api = {
       const present = att.filter((a) => a.status === 'present').length;
       
       const groupMgs = mgs.filter(mg => mg.group_id === gid);
-      const tdMg = groupMgs.find(mg => mg.session_type === 'td' || !mg.session_type);
-      const tpMg = groupMgs.find(mg => mg.session_type === 'tp');
-      const tdTeacher = tdMg ? teachersAll.find(t => t.id === tdMg.assigned_teacher_id) : null;
-      const tpTeacher = tpMg ? teachersAll.find(t => t.id === tpMg.assigned_teacher_id) : null;
+      const groupTeacher = groupMgs.find((mg) => mg.assigned_teacher_id) ?? null;
+      const assignedTeacher = groupTeacher ? teachersAll.find(t => t.id === groupTeacher.assigned_teacher_id) : null;
       
       return {
         ...grp,
         attendance_rate: att.length ? present / att.length : 0,
         session_count: fs.length,
-        assigned_teacher_name: tdTeacher?.full_name ?? tpTeacher?.full_name ?? null,
-        assigned_teacher_name_td: tdTeacher?.full_name ?? null,
-        assigned_teacher_name_tp: tpTeacher?.full_name ?? null,
-        assigned_teacher_id_td: tdMg?.assigned_teacher_id ?? null,
-        assigned_teacher_id_tp: tpMg?.assigned_teacher_id ?? null,
+        assigned_teacher_name: assignedTeacher?.full_name ?? null,
+        assigned_teacher_name_td: assignedTeacher?.full_name ?? null,
+        assigned_teacher_name_tp: null,
+        assigned_teacher_id_td: groupTeacher?.assigned_teacher_id ?? null,
+        assigned_teacher_id_tp: null,
       };
     });
     const allFs = sessionsAll.filter((s) => s.module_id === moduleId);
@@ -467,15 +465,14 @@ export const api = {
   },
 
   async getTeacherSessionTypes(): Promise<Record<string, string[]>> {
-    const { data, error } = await supabase.from('module_groups').select('assigned_teacher_id, session_type');
+    const { data, error } = await supabase.from('module_groups').select('assigned_teacher_id');
     if (error) { console.error('module_groups', error); return {}; }
     const map: Record<string, Set<string>> = {};
     for (const row of (data ?? []) as any[]) {
       const tid = row.assigned_teacher_id;
-      const st = row.session_type ?? 'td';
       if (!tid) continue;
       if (!map[tid]) map[tid] = new Set();
-      map[tid].add(st);
+      map[tid].add('td');
     }
     const out: Record<string, string[]> = {};
     for (const k of Object.keys(map)) out[k] = Array.from(map[k]);
@@ -977,16 +974,25 @@ export const api = {
     return { ok, skipped, errors };
   },
 
-  async assignTeacherToGroup(groupId: string, moduleId: string, teacherId: string, sessionType: 'td' | 'tp' = 'td'): Promise<void> {
-    const { error } = await supabase
+  async assignTeacherToGroup(groupId: string, moduleId: string, teacherId: string): Promise<void> {
+    const { data: updatedRows, error: updateError } = await supabase
       .from('module_groups')
-      .upsert({ 
-         module_id: moduleId,
-         group_id: groupId,
-         assigned_teacher_id: teacherId,
-         session_type: sessionType
-      }, { onConflict: 'module_id,group_id,session_type' });
-    if (error) throw error;
+      .update({ assigned_teacher_id: teacherId })
+      .eq('module_id', moduleId)
+      .eq('group_id', groupId)
+      .select('module_id');
+
+    if (updateError) throw updateError;
+    if ((updatedRows ?? []).length > 0) return;
+
+    const { error: insertError } = await supabase
+      .from('module_groups')
+      .insert({
+        module_id: moduleId,
+        group_id: groupId,
+        assigned_teacher_id: teacherId,
+      });
+    if (insertError) throw insertError;
   },
 
   async updateModule(moduleId: string, patch: { lecturer_id?: string }): Promise<void> {
