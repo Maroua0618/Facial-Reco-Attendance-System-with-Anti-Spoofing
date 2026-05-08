@@ -4,7 +4,7 @@ load_dotenv()  # reads backend/.env
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import ALLOWED_ORIGINS
-from routes import health, embed, recognize
+from routes import health, embed, recognize, sessions
 
 app = FastAPI(title="C1 Face Attendance API", version="0.1.0")
 app.add_middleware(
@@ -17,3 +17,4 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(embed.router)
 app.include_router(recognize.router)
+app.include_router(sessions.router)

@@ -2,24 +2,103 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { api } from '@/lib/mock-data';
-import type { Teacher, Module, Group, Session } from '@/types/db';
+import type { Teacher, Module, Group } from '@/types/db';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Check, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 interface AssignTeachersTabProps {
   groups?: Group[];
   teachers: Teacher[];
   modules: Module[];
+}
+
+interface TeacherOptionProps {
+  teachers: Teacher[];
+  value: string;
+  onChange: (teacherId: string) => void;
+  placeholder: string;
+  teacherSessionTypes: Record<string, string[]>;
+  tpOnly?: boolean;
+}
+
+function TeacherDropdown({
+  teachers,
+  value,
+  onChange,
+  placeholder,
+  teacherSessionTypes,
+  tpOnly = false,
+}: TeacherOptionProps) {
+  const [open, setOpen] = useState(false);
+  const selectedTeacher = teachers.find((teacher) => teacher.id === value);
+
+  const items = teachers
+    .filter((teacher) => teacher.role !== 'admin')
+    .filter((teacher) => {
+      if (!tpOnly) return true;
+      const types = teacherSessionTypes?.[teacher.id] ?? [];
+      return types.includes('tp');
+    });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-44 justify-between"
+        >
+          <span className="truncate text-left">
+            {selectedTeacher?.full_name ?? placeholder}
+          </span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search teachers..." />
+          <CommandList>
+            <CommandEmpty>No teacher found.</CommandEmpty>
+            <CommandGroup>
+              {items.map((teacher) => (
+                <CommandItem
+                  key={teacher.id}
+                  value={teacher.full_name}
+                  onSelect={() => {
+                    onChange(teacher.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      'mr-2 h-4 w-4',
+                      value === teacher.id ? 'opacity-100' : 'opacity-0',
+                    )}
+                  />
+                  {teacher.full_name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export default function AssignTeachersTab({ teachers, modules }: AssignTeachersTabProps) {
@@ -34,25 +113,12 @@ export default function AssignTeachersTab({ teachers, modules }: AssignTeachersT
     enabled: !!selectedModuleId,
   });
 
-  const { data: sessions = [] } = useQuery<Session[]>({
-    queryKey: ['sessions'],
-    queryFn: api.getSessions,
+  
+
+  const { data: teacherSessionTypes = {} } = useQuery<Record<string, string[]>>({
+    queryKey: ['teacher-session-types'],
+    queryFn: api.getTeacherSessionTypes,
   });
-
-  const getSessionTypesForGroup = (groupId: string, moduleId: string): string[] => {
-    const types = new Set<string>();
-    sessions.forEach(s => {
-      if (s.group_id === groupId && s.module_id === moduleId) {
-        types.add(s.session_type);
-      }
-    });
-    return Array.from(types).sort();
-  };
-
-  const typeLabels: Record<string, string> = {
-    'td': 'Tutorial (TD)',
-    'tp': 'Lab (TP)',
-  };
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -65,6 +131,7 @@ export default function AssignTeachersTab({ teachers, modules }: AssignTeachersT
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['moduleDetail'] });
+      qc.invalidateQueries({ queryKey: ['teacher-assignments'] });
       toast.success('Teachers assigned successfully');
       setAssignments({});
     },
@@ -75,18 +142,14 @@ export default function AssignTeachersTab({ teachers, modules }: AssignTeachersT
     <div className="space-y-6">
       <div className="space-y-2">
         <Label>Select module</Label>
-        <Select value={selectedModuleId || ''} onValueChange={setSelectedModuleId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Choose module..." />
-          </SelectTrigger>
-          <SelectContent>
-            {modules.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.module_code} — {m.module_name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          items={modules}
+          value={selectedModuleId || ''}
+          onChange={setSelectedModuleId}
+          placeholder="Choose module..."
+          renderLabel={(m) => `${m.module_code} — ${m.module_name}`}
+          className="w-full"
+        />
       </div>
 
       {moduleDetail && (
@@ -115,51 +178,36 @@ export default function AssignTeachersTab({ teachers, modules }: AssignTeachersT
                           {g.assigned_teacher_name_td || '—'}
                         </TableCell>
                         <TableCell>
-                          <Select
+                          <TeacherDropdown
+                            teachers={teachers}
                             value={assignments[g.id]?.td || g.assigned_teacher_id_td || ''}
-                            onValueChange={(teacherId) =>
-                              setAssignments(prev => ({
+                            onChange={(teacherId) =>
+                              setAssignments((prev) => ({
                                 ...prev,
-                                [g.id]: { ...prev[g.id], td: teacherId }
+                                [g.id]: { ...prev[g.id], td: teacherId },
                               }))
                             }
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue placeholder="TD Teacher" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {teachers.filter((t) => t.role !== 'admin').map((t) => (
-                                <SelectItem key={t.id} value={t.id}>
-                                  {t.full_name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder="TD Teacher"
+                            teacherSessionTypes={teacherSessionTypes}
+                          />
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {g.assigned_teacher_name_tp || '—'}
                         </TableCell>
                         <TableCell>
-                          <Select
+                          <TeacherDropdown
+                            teachers={teachers}
                             value={assignments[g.id]?.tp || g.assigned_teacher_id_tp || ''}
-                            onValueChange={(teacherId) =>
-                              setAssignments(prev => ({
+                            onChange={(teacherId) =>
+                              setAssignments((prev) => ({
                                 ...prev,
-                                [g.id]: { ...prev[g.id], tp: teacherId }
+                                [g.id]: { ...prev[g.id], tp: teacherId },
                               }))
                             }
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue placeholder="TP Teacher" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {teachers.filter((t) => t.role !== 'admin').map((t) => (
-                                <SelectItem key={t.id} value={t.id}>
-                                  {t.full_name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder="TP Teacher"
+                            teacherSessionTypes={teacherSessionTypes}
+                            tpOnly
+                          />
                         </TableCell>
                       </TableRow>
                     );

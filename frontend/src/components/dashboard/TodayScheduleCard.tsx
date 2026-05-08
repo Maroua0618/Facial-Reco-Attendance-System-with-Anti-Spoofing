@@ -1,18 +1,16 @@
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import type { SessionRow } from '@/types/db';
 
 export function TodayScheduleCard({
   rows, liveSessionId,
 }: { rows: SessionRow[]; liveSessionId?: string }) {
-  const [showAll, setShowAll] = useState(false);
   const limit = 3;
   
-  const displayedRows = showAll ? rows : rows.slice(0, limit);
+  const displayedRows = rows.slice(0, limit);
   const hasMore = rows.length > limit;
 
   return (
@@ -58,7 +56,6 @@ export function TodayScheduleCard({
                   </Link>
                 );
               })}
-            </div>
             
             {hasMore && (
               <Button 
@@ -72,6 +69,7 @@ export function TodayScheduleCard({
                 </Link>
               </Button>
             )}
+            </div>
           </div>
         )}
       </CardContent>

@@ -5,9 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Link } from 'react-router-dom';
 import { ShieldAlert, Download } from 'lucide-react';
 import { api, type DashboardFilters } from '@/lib/mock-data';
@@ -20,6 +18,9 @@ export default function SpoofLog() {
   const { data: modules = [] } = useQuery({ queryKey: ['modules'], queryFn: api.getModules });
   const { data: groups = [] }  = useQuery({ queryKey: ['groups'],  queryFn: api.getGroups });
   const { data: log = [] }     = useQuery({ queryKey: ['spoofLog', filters], queryFn: () => api.getSpoofLog(filters) });
+
+  const modulesWithAll = [{ id: ALL, module_name: 'All modules', module_code: '', lecturer_id: null, academic_year: '', created_at: '' }, ...modules];
+  const groupsWithAll = [{ id: ALL, group_name: 'All groups', year: 0, created_at: '' }, ...groups];
 
   const exportCSV = () => {
     const rows = log.map((e) => ({
@@ -59,20 +60,22 @@ export default function SpoofLog() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Select value={filters.moduleId ?? ALL} onValueChange={(v) => setFilters((f) => ({ ...f, moduleId: v === ALL ? undefined : v }))}>
-            <SelectTrigger className="w-[220px]"><SelectValue placeholder="All modules" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All modules</SelectItem>
-              {modules.map((m) => <SelectItem key={m.id} value={m.id}>{m.module_code} — {m.module_name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filters.groupId ?? ALL} onValueChange={(v) => setFilters((f) => ({ ...f, groupId: v === ALL ? undefined : v }))}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="All groups" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All groups</SelectItem>
-              {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.group_name} (Year {g.year})</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            items={modulesWithAll}
+            value={filters.moduleId ?? ALL}
+            onChange={(v) => setFilters((f) => ({ ...f, moduleId: v === ALL ? undefined : v }))}
+            placeholder="All modules"
+            renderLabel={(m) => `${m.module_code} — ${m.module_name}`}
+            className="w-[220px]"
+          />
+          <SearchableSelect
+            items={groupsWithAll}
+            value={filters.groupId ?? ALL}
+            onChange={(v) => setFilters((f) => ({ ...f, groupId: v === ALL ? undefined : v }))}
+            placeholder="All groups"
+            renderLabel={(g) => `${g.group_name} (Year ${g.year})`}
+            className="w-[180px]"
+          />
         </div>
 
         <Card>

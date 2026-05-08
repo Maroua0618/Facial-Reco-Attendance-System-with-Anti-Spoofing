@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +9,7 @@ import { api } from '@/lib/mock-data';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { Group, Module, Teacher } from '@/types/db';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 interface ScheduleSessionsTabProps {
   groups: Group[];
@@ -33,6 +27,9 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
   const [duration, setDuration] = useState('2');
   const [sessionType, setSessionType] = useState<'td' | 'tp'>('td');
   const [week, setWeek] = useState<string>('1');
+
+  const selectedDateTime = sessionDate ? new Date(`${sessionDate}T${startTime}:00`) : null;
+  const isPastSelection = !!selectedDateTime && selectedDateTime < new Date();
 
   // Get current teacher's role
   const { data: teacher } = useQuery<Teacher | null>({
@@ -78,9 +75,9 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
         throw new Error('Please fill in all required fields');
       }
 
-      // Validate date is not in the past
+      // Validate the full local date/time is not in the past
       const now = new Date();
-      const selected = new Date(sessionDate);
+      const selected = new Date(`${sessionDate}T${startTime}:00`);
       if (selected < now) {
         throw new Error('Cannot schedule sessions in the past');
       }
@@ -122,18 +119,13 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
           {/* Module Selection */}
           <div>
             <Label>Module *</Label>
-            <Select value={selectedModuleId || ''} onValueChange={setSelectedModuleId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select module..." />
-              </SelectTrigger>
-              <SelectContent>
-                {visibleModules.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.module_name || 'Unnamed'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              items={visibleModules}
+              value={selectedModuleId || ''}
+              onChange={setSelectedModuleId}
+              placeholder="Select module..."
+              renderLabel={(m) => m.module_name || 'Unnamed'}
+            />
             {visibleModules.length === 0 && (
               <p className="text-xs text-muted-foreground mt-1">
                 {isAdmin ? 'No modules available' : 'You are not assigned to any modules'}
@@ -144,18 +136,13 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
           {/* Group Selection */}
           <div>
             <Label>Group *</Label>
-            <Select value={selectedGroupId || ''} onValueChange={setSelectedGroupId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select group..." />
-              </SelectTrigger>
-              <SelectContent>
-                {visibleGroups.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>
-                    {g.group_name} (Y{g.year})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              items={visibleGroups}
+              value={selectedGroupId || ''}
+              onChange={setSelectedGroupId}
+              placeholder="Select group..."
+              renderLabel={(g) => `${g.group_name} (Y${g.year})`}
+            />
             {visibleGroups.length === 0 && (
               <p className="text-xs text-muted-foreground mt-1">
                 {isAdmin ? 'No groups available' : 'You are not assigned to any groups'}
@@ -183,6 +170,14 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
             />
           </div>
 
+          {sessionDate && startTime && (
+            <p className={`col-span-2 text-xs ${isPastSelection ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {isPastSelection
+                ? 'This date and time is in the past.'
+                : `Selected slot: ${selectedDateTime?.toLocaleString()}`}
+            </p>
+          )}
+
           {/* Duration */}
           <div>
             <Label>Duration (hours)</Label>
@@ -198,15 +193,16 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
           {/* Session Type */}
           <div>
             <Label>Session Type</Label>
-            <Select value={sessionType} onValueChange={(v) => setSessionType(v as any)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="td">Tutorial (TD)</SelectItem>
-                <SelectItem value="tp">Lab (TP)</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              items={[
+                { id: 'td', module_name: 'Tutorial (TD)', module_code: '', lecturer_id: null, academic_year: '', created_at: '' },
+                { id: 'tp', module_name: 'Lab (TP)', module_code: '', lecturer_id: null, academic_year: '', created_at: '' },
+              ]}
+              value={sessionType}
+              onChange={(v) => setSessionType(v as any)}
+              placeholder="Select type..."
+              renderLabel={(item) => item.module_name}
+            />
           </div>
 
           {/* Week */}
@@ -224,7 +220,7 @@ export default function ScheduleSessionsTab({ groups = [], modules = [] }: Sched
 
         <Button
           onClick={() => createSessionMut.mutate()}
-          disabled={!selectedModuleId || !selectedGroupId || !sessionDate || createSessionMut.isPending}
+          disabled={!selectedModuleId || !selectedGroupId || !sessionDate || isPastSelection || createSessionMut.isPending}
           className="w-full"
         >
           {createSessionMut.isPending ? 'Scheduling...' : 'Schedule Session'}

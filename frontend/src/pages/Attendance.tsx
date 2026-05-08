@@ -5,7 +5,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { CameraFeed } from '@/components/CameraFeed';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { ShieldAlert, CheckCircle2, HelpCircle, Pause, Play, CheckSquare } from 'lucide-react';
 import { api } from '@/lib/mock-data';
@@ -177,18 +177,14 @@ export default function Attendance() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <Select value={sessionId} onValueChange={handleSessionChange}>
-              <SelectTrigger className="w-full sm:w-[320px]">
-                <SelectValue placeholder="Select session" />
-              </SelectTrigger>
-              <SelectContent>
-                {today.map((s) => (
-                  <SelectItem key={s.session.id} value={s.session.id}>
-                    {s.module.module_code} · {s.group.group_name} · {s.session.start_time}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              items={today.map((s) => ({ id: s.session.id, ...s }))}
+              value={sessionId || ''}
+              onChange={handleSessionChange}
+              placeholder="Choose session..."
+              renderLabel={(s: any) => `${s.module.module_code} · ${s.group.group_name} · ${s.session.start_time}`}
+              className="w-full sm:w-[320px]"
+            />
             {!isFinished && (
               <Button
                 onClick={handleRunToggle}

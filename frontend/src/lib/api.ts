@@ -52,6 +52,27 @@ export async function recognizeFace(
   return r.json();
 }
 
+export interface CreateSessionPayload {
+  module_id: string;
+  group_id: string;
+  session_date: string;
+  start_time: string;
+  session_type: 'lecture' | 'td' | 'tp' | 'exam';
+  week: number;
+}
+
+export async function createSession(payload: CreateSessionPayload): Promise<void> {
+  const r = await fetch(`${FASTAPI_URL}/sessions`, {
+    method: 'POST',
+    headers: {
+      ...(await authHeaders()),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) throw new Error(`create session failed: ${r.status} ${await r.text()}`);
+}
+
 export interface BackendHealth {
   ok: boolean;
   ts: number;

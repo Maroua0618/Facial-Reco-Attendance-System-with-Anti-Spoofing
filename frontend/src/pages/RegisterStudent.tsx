@@ -6,7 +6,6 @@ import { CameraFeed } from '@/components/CameraFeed';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Camera, CheckCircle2, Loader2, Search, UserPlus, Check } from 'lucide-react';
@@ -14,6 +13,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/mock-data';
 import { embedFace } from '@/lib/api';
 import { supabase } from '@/integrations/supabase/client';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 const SHOTS = 5;
 
@@ -300,21 +300,23 @@ export default function RegisterStudent() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label>Year</Label>
-                      <Select value={selectedYear} onValueChange={(v) => { setSelectedYear(v); setGroupId(''); }}>
-                        <SelectTrigger><SelectValue placeholder="Select year" /></SelectTrigger>
-                        <SelectContent>
-                          {uniqueYears.map((y) => <SelectItem key={y} value={y}>Year {y}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        items={uniqueYears.map((y) => ({ id: y, group_name: `Year ${y}`, year: parseInt(y), created_at: '' }))}
+                        value={selectedYear}
+                        onChange={(v) => { setSelectedYear(v); setGroupId(''); }}
+                        placeholder="Select year"
+                        renderLabel={(item) => `Year ${item.year}`}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Group</Label>
-                      <Select value={groupId} onValueChange={setGroupId} disabled={!selectedYear}>
-                        <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
-                        <SelectContent>
-                          {filteredGroups.map((g) => <SelectItem key={g.id} value={g.id}>{g.group_name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        items={filteredGroups}
+                        value={groupId}
+                        onChange={setGroupId}
+                        placeholder="Select group"
+                        renderLabel={(g) => g.group_name}
+                      />
                     </div>
                   </div>
                 </CardContent>

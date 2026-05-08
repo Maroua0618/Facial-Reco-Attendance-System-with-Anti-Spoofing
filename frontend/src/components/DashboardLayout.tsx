@@ -73,7 +73,7 @@ function AppSidebarContent({ role }: { role?: string | null }) {
       title: "Register Student",
       url: "/students/register",
       icon: UserPlus,
-      show: !isAdmin,
+      show: isAdmin || isLecturer,
     },
     { title: "Attendance", url: "/attendance", icon: Camera, show: !isAdmin },
     { title: "History", url: "/history", icon: History, show: true },

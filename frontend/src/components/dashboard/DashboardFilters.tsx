@@ -1,11 +1,5 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type { Group, Module } from '@/types/db';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 interface Props {
   modules: Module[];
@@ -26,41 +20,27 @@ export function DashboardFilters({
   onModuleChange,
   onGroupChange,
 }: Props) {
+  const modulesWithAll = [{ id: ALL, module_name: 'All modules', module_code: '', lecturer_id: null, academic_year: '', created_at: '' }, ...modules];
+  const groupsWithAll = [{ id: ALL, group_name: 'All groups', year: 0, created_at: '' }, ...groups];
+
   return (
     <div className="flex flex-wrap gap-3">
-      <Select
+      <SearchableSelect
+        items={modulesWithAll}
         value={moduleId ?? ALL}
-        onValueChange={(v) => onModuleChange(v === ALL ? undefined : v)}
-      >
-        <SelectTrigger className="w-[220px]">
-          <SelectValue placeholder="All modules" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>All modules</SelectItem>
-          {modules.map((m) => (
-            <SelectItem key={m.id} value={m.id}>
-              {m.module_code} — {m.module_name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
+        onChange={(v) => onModuleChange(v === ALL ? undefined : v)}
+        placeholder="All modules"
+        renderLabel={(m) => `${m.module_code} — ${m.module_name}`}
+        className="w-[220px]"
+      />
+      <SearchableSelect
+        items={groupsWithAll}
         value={groupId ?? ALL}
-        onValueChange={(v) => onGroupChange(v === ALL ? undefined : v)}
-      >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="All groups" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>All groups</SelectItem>
-          {groups.map((g) => (
-            <SelectItem key={g.id} value={g.id}>
-              {g.group_name} (Year {g.year})
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        onChange={(v) => onGroupChange(v === ALL ? undefined : v)}
+        placeholder="All groups"
+        renderLabel={(g) => `${g.group_name} (Year ${g.year})`}
+        className="w-[180px]"
+      />
     </div>
   );
 }

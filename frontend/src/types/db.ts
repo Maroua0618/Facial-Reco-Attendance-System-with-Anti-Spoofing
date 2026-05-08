@@ -131,7 +131,7 @@ export interface RankedStudent { student: Student; attended: number; absent: num
 export interface TrendSnapshot { current_week: number; previous_week: number; current_rate: number; previous_rate: number; delta: number }
 export interface HeatmapCell { day_of_week: number; time_slot: string; attendance_rate: number; session_count: number }
 
-export interface GroupWithRate extends Group { attendance_rate: number; session_count: number; assigned_teacher_name?: string | null }
+export interface GroupWithRate extends Group { attendance_rate: number; session_count: number; assigned_teacher_name?: string | null; assigned_teacher_name_td?: string | null; assigned_teacher_name_tp?: string | null; assigned_teacher_id_td?: string | null; assigned_teacher_id_tp?: string | null }
 export interface StudentWithRate { student: Student; attendance_rate: number; absent: number; total: number }
 export interface ModuleDetail { module: Module; lecturer: Teacher | null; groups: GroupWithRate[]; overall_rate: number; total_sessions: number }
 export interface GroupDetail { group: Group; students: StudentWithRate[]; modules: Module[]; overall_rate: number }

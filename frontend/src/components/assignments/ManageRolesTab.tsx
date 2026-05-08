@@ -1,18 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import type { Teacher } from '@/types/db';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 interface ManageRolesTabProps {
   teachers: Teacher[];
@@ -73,24 +67,23 @@ export default function ManageRolesTab({ teachers }: ManageRolesTabProps) {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Select
+                      <SearchableSelect
+                        items={[
+                          { id: 'admin', full_name: 'Admin' },
+                          { id: 'lecturer', full_name: 'Lecturer' },
+                          { id: 'teacher', full_name: 'Teacher' },
+                        ] as any[]}
                         value={newRole || ''}
-                        onValueChange={(role) =>
+                        onChange={(role) =>
                           setRoleChanges({
                             ...roleChanges,
                             [t.id]: role as UserRole,
                           })
                         }
-                      >
-                        <SelectTrigger className="w-40">
-                          <SelectValue placeholder="Change role..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="lecturer">Lecturer</SelectItem>
-                          <SelectItem value="teacher">Teacher</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        placeholder="Change role..."
+                        renderLabel={(item) => item.full_name}
+                        className="w-40"
+                      />
                     </TableCell>
                   </TableRow>
                 );

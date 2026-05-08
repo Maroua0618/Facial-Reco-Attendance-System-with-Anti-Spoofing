@@ -26,6 +26,7 @@ import type {
   StudentProfileData,
 } from '@/types/db';
 import { supabase } from '@/integrations/supabase/client';
+import { createSession as createBackendSession } from '@/lib/api';
 
 // ---------- adapters: DB rows -> frontend types ----------
 function adaptModule(r: any): Module {
@@ -130,11 +131,16 @@ async function getCurrentTeacher(): Promise<Teacher | null> {
 
 
 async function getTeacherScope(teacher: Teacher | null) {
-  const scope = {
+  const scope: {
+    isTeacher: boolean;
+    myGroupIds: Set<string>;
+    myModuleIds: Set<string>;
+    sessionFilter: (s: Session) => boolean;
+  } = {
     isTeacher: false,
     myGroupIds: new Set<string>(),
     myModuleIds: new Set<string>(),
-    sessionFilter: (s: Session) => true
+    sessionFilter: (s: Session) => !!s || true,
   };
   if (teacher && teacher.role !== 'admin') {
     scope.isTeacher = true;
@@ -174,13 +180,6 @@ function buildSessionRow(
     present_count: present, absent_count: absent,
     attendance_rate: att.length ? present / att.length : 0,
   };
-}
-
-async function studentIdsInGroup(groupId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('student_groups').select('student_id').eq('group_id', groupId);
-  if (error) { console.error('student_groups', error); return []; }
-  return (data ?? []).map((r: any) => r.student_id);
 }
 
 function getDemoToday(sessions: Session[]): string {
@@ -465,6 +464,22 @@ export const api = {
       overall_rate: allAtt.length ? overallPresent / allAtt.length : 0,
       total_sessions: allFs.length,
     };
+  },
+
+  async getTeacherSessionTypes(): Promise<Record<string, string[]>> {
+    const { data, error } = await supabase.from('module_groups').select('assigned_teacher_id, session_type');
+    if (error) { console.error('module_groups', error); return {}; }
+    const map: Record<string, Set<string>> = {};
+    for (const row of (data ?? []) as any[]) {
+      const tid = row.assigned_teacher_id;
+      const st = row.session_type ?? 'td';
+      if (!tid) continue;
+      if (!map[tid]) map[tid] = new Set();
+      map[tid].add(st);
+    }
+    const out: Record<string, string[]> = {};
+    for (const k of Object.keys(map)) out[k] = Array.from(map[k]);
+    return out;
   },
 
   async getGroupDetail(groupId: string): Promise<GroupDetail | null> {
@@ -990,10 +1005,7 @@ export const api = {
     session_type: 'lecture' | 'td' | 'tp' | 'exam';
     week: number;
   }): Promise<void> {
-    const { error } = await supabase
-      .from('sessions')
-      .insert([data]);
-    if (error) throw error;
+    await createBackendSession(data);
   },
 
 

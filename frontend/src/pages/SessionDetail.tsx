@@ -5,9 +5,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChevronLeft, Camera, Download, CheckSquare } from 'lucide-react';
 import { api } from '@/lib/mock-data';
@@ -185,21 +183,20 @@ export default function SessionDetail() {
                             {r.marked_at ?? '—'}
                           </TableCell>
                           <TableCell>
-                            <Select
+                            <SearchableSelect
+                              items={[
+                                { id: 'present', full_name: 'Present' },
+                                { id: 'absent', full_name: 'Absent' },
+                                { id: 'spoof', full_name: 'Spoof' },
+                              ] as any[]}
                               value={r.status === 'not_marked' ? '' : r.status}
-                              onValueChange={(v) =>
+                              onChange={(v) =>
                                 overrideMut.mutate({ studentId: r.student.id, status: v as AttendanceStatus })
                               }
-                            >
-                              <SelectTrigger className="h-8">
-                                <SelectValue placeholder="Set..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="present">Present</SelectItem>
-                                <SelectItem value="absent">Absent</SelectItem>
-                                <SelectItem value="spoof">Spoof</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              placeholder="Set..."
+                              renderLabel={(item) => item.full_name}
+                              className="w-32"
+                            />
                           </TableCell>
                         </TableRow>
                       ))}

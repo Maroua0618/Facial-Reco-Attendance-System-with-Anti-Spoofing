@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Calendar } from 'lucide-react';
 import { api } from '@/lib/mock-data';
-import type { Session, Module, Group } from '@/types/db';
+import type { Session, Module } from '@/types/db';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
 const TIME_SLOTS = [

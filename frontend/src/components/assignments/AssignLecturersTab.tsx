@@ -1,18 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { api } from '@/lib/mock-data';
 import type { Module, Teacher } from '@/types/db';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 interface AssignLecturersTabProps {
   modules: Module[];
@@ -67,26 +61,19 @@ export default function AssignLecturersTab({ modules, teachers }: AssignLecturer
                       {currentLecturer?.full_name || '—'}
                     </TableCell>
                     <TableCell>
-                      <Select
+                      <SearchableSelect
+                        items={lecturers}
                         value={assignments[m.id] || ''}
-                        onValueChange={(teacherId) =>
+                        onChange={(teacherId) =>
                           setAssignments({
                             ...assignments,
                             [m.id]: teacherId,
                           })
                         }
-                      >
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Choose lecturer..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {lecturers.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.full_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Choose lecturer..."
+                        renderLabel={(t) => t.full_name}
+                        className="w-48"
+                      />
                     </TableCell>
                   </TableRow>
                 );

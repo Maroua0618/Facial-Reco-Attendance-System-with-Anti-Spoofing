@@ -2,18 +2,12 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Upload } from 'lucide-react';
 import { api } from '@/lib/mock-data';
 import { toast } from 'sonner';
 import type { Group } from '@/types/db';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 interface ImportStudentsTabProps {
   groups: Group[];
@@ -64,18 +58,13 @@ export default function ImportStudentsTab({ groups }: ImportStudentsTabProps) {
       <CardContent className="space-y-6">
         <div className="space-y-2">
           <Label>Target group</Label>
-          <Select value={selectedGroupId || ''} onValueChange={setSelectedGroupId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose group..." />
-            </SelectTrigger>
-            <SelectContent>
-              {groups.map((g) => (
-                <SelectItem key={g.id} value={g.id}>
-                  {g.group_name} (Year {g.year})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            items={groups}
+            value={selectedGroupId || ''}
+            onChange={setSelectedGroupId}
+            placeholder="Choose group..."
+            renderLabel={(g) => `${g.group_name} (Year ${g.year})`}
+          />
         </div>
 
         <div className="space-y-2">
