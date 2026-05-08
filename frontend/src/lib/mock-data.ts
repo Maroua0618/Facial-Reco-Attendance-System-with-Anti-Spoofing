@@ -249,7 +249,7 @@ export const api = {
       supabase.from('student_groups').select('*')
     ]);
     
-    let fs = filterSessions(sessionsAll, f).filter(scope.sessionFilter);
+    const fs = filterSessions(sessionsAll, f).filter(scope.sessionFilter);
 
     const ids = new Set(fs.map((s) => s.id));
     const att = attendanceAll.filter((a) => ids.has(a.session_id));
