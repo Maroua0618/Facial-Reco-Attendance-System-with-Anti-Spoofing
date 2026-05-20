@@ -15,7 +15,7 @@ export function Navbar() {
 
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/login?tab=login">Login</Link>
+            <Link to="/login">Login</Link>
           </Button>
           <Button size="sm" className="glow-sm" asChild>
             <Link to="/login?tab=signup">Get Started</Link>

@@ -40,7 +40,7 @@ export function HeroSection() {
               size="lg"
               className="text-base px-8"
             >
-              <Link to="/login?tab=login">Login</Link>
+              <Link to="/login">Login</Link>
             </Button>
           </div>
 

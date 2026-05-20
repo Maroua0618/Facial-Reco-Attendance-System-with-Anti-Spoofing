@@ -1,0 +1,231 @@
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { api } from '@/lib/mock-data';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import type { Group, Module, Teacher } from '@/types/db';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+
+interface ScheduleSessionsTabProps {
+  groups: Group[];
+  modules: Module[];
+}
+
+export default function ScheduleSessionsTab({ groups = [], modules = [] }: ScheduleSessionsTabProps) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [sessionDate, setSessionDate] = useState('');
+  const [startTime, setStartTime] = useState('08:00');
+  const [duration, setDuration] = useState('2');
+  const [sessionType, setSessionType] = useState<'td' | 'tp'>('td');
+  const [week, setWeek] = useState<string>('1');
+
+  const selectedDateTime = sessionDate ? new Date(`${sessionDate}T${startTime}:00`) : null;
+  const isPastSelection = !!selectedDateTime && selectedDateTime < new Date();
+
+  // Get current teacher's role
+  const { data: teacher } = useQuery<Teacher | null>({
+    queryKey: ['current-teacher', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data } = await supabase
+        .from('teachers')
+        .select('*')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  const isAdmin = teacher?.role === 'admin';
+
+  // Filter groups based on role
+  // Teachers can only see groups where they're assigned as teacher
+  const { data: teacherAssignments = [] } = useQuery({
+    queryKey: ['teacher-assignments', teacher?.id],
+    queryFn: async () => {
+      if (!teacher?.id || isAdmin) return [];
+      const { data } = await supabase
+        .from('module_groups')
+        .select('group_id, module_id')
+        .eq('assigned_teacher_id', teacher.id);
+      return data || [];
+    },
+    enabled: !!teacher?.id && !isAdmin,
+  });
+
+  const teacherGroupIds = teacherAssignments.map(item => item.group_id);
+  const teacherModuleIds = teacherAssignments.map(item => item.module_id);
+
+  const visibleGroups = isAdmin ? groups : groups.filter(g => teacherGroupIds.includes(g.id));
+  const visibleModules = isAdmin ? modules : modules.filter(m => m.lecturer_id === teacher?.id || teacherModuleIds.includes(m.id));
+
+  const createSessionMut = useMutation({
+    mutationFn: async () => {
+      if (!selectedModuleId || !selectedGroupId || !sessionDate || !startTime) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      // Validate the full local date/time is not in the past
+      const now = new Date();
+      const selected = new Date(`${sessionDate}T${startTime}:00`);
+      if (selected < now) {
+        throw new Error('Cannot schedule sessions in the past');
+      }
+
+      // Calculate week number (1-14 for academic year)
+      const weekNum = Math.max(1, Math.min(14, parseInt(week) || 1));
+
+      await api.createSession({
+        module_id: selectedModuleId,
+        group_id: selectedGroupId,
+        session_date: sessionDate,
+        start_time: startTime,
+        session_type: sessionType,
+        week: weekNum,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      toast.success('Session scheduled successfully');
+      // Reset form
+      setSelectedModuleId(null);
+      setSelectedGroupId(null);
+      setSessionDate('');
+      setStartTime('08:00');
+      setDuration('2');
+      setSessionType('td');
+      setWeek('1');
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to schedule session'),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Schedule Sessions</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          {/* Module Selection */}
+          <div>
+            <Label>Module *</Label>
+            <SearchableSelect
+              items={visibleModules}
+              value={selectedModuleId || ''}
+              onChange={setSelectedModuleId}
+              placeholder="Select module..."
+              renderLabel={(m) => m.module_name || 'Unnamed'}
+            />
+            {visibleModules.length === 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {isAdmin ? 'No modules available' : 'You are not assigned to any modules'}
+              </p>
+            )}
+          </div>
+
+          {/* Group Selection */}
+          <div>
+            <Label>Group *</Label>
+            <SearchableSelect
+              items={visibleGroups}
+              value={selectedGroupId || ''}
+              onChange={setSelectedGroupId}
+              placeholder="Select group..."
+              renderLabel={(g) => `${g.group_name} (Y${g.year})`}
+            />
+            {visibleGroups.length === 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {isAdmin ? 'No groups available' : 'You are not assigned to any groups'}
+              </p>
+            )}
+          </div>
+
+          {/* Session Date */}
+          <div>
+            <Label>Session Date *</Label>
+            <Input
+              type="date"
+              value={sessionDate}
+              onChange={(e) => setSessionDate(e.target.value)}
+            />
+          </div>
+
+          {/* Start Time */}
+          <div>
+            <Label>Start Time *</Label>
+            <Input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+            />
+          </div>
+
+          {sessionDate && startTime && (
+            <p className={`col-span-2 text-xs ${isPastSelection ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {isPastSelection
+                ? 'This date and time is in the past.'
+                : `Selected slot: ${selectedDateTime?.toLocaleString()}`}
+            </p>
+          )}
+
+          {/* Duration */}
+          <div>
+            <Label>Duration (hours)</Label>
+            <Input
+              type="number"
+              min="1"
+              max="4"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+            />
+          </div>
+
+          {/* Session Type */}
+          <div>
+            <Label>Session Type</Label>
+            <SearchableSelect
+              items={[
+                { id: 'td', module_name: 'Tutorial (TD)', module_code: '', lecturer_id: null, academic_year: '', created_at: '' },
+                { id: 'tp', module_name: 'Lab (TP)', module_code: '', lecturer_id: null, academic_year: '', created_at: '' },
+              ]}
+              value={sessionType}
+              onChange={(v) => setSessionType(v as any)}
+              placeholder="Select type..."
+              renderLabel={(item) => item.module_name}
+            />
+          </div>
+
+          {/* Week */}
+          <div>
+            <Label>Week (1-14)</Label>
+            <Input
+              type="number"
+              min="1"
+              max="14"
+              value={week}
+              onChange={(e) => setWeek(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <Button
+          onClick={() => createSessionMut.mutate()}
+          disabled={!selectedModuleId || !selectedGroupId || !sessionDate || isPastSelection || createSessionMut.isPending}
+          className="w-full"
+        >
+          {createSessionMut.isPending ? 'Scheduling...' : 'Schedule Session'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}

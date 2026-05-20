@@ -64,13 +64,6 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
-
-  /* Hide default browser password reveal eye icon */
-  input[type="password"]::-ms-reveal,
-  input[type="password"]::-ms-clear,
-  input[type="password"]::-webkit-credentials-auto-fill-button {
-    display: none !important;
-  }
 }
 
 @layer utilities {
@@ -148,4 +141,14 @@
       transform: translateY(-10px);
     }
   }
+}
+
+/* Hide browser-native password reveal icons */
+::-ms-reveal,
+::-ms-clear {
+  display: none;
+}
+input[type="password"]::-webkit-password-reveal-button {
+  display: none !important;
+  -webkit-appearance: none !important;
 }
